@@ -282,6 +282,7 @@
   ./services/networking/dnsmasq.nix
   ./services/networking/docker-registry-server.nix
   ./services/networking/ejabberd.nix
+  ./services/networking/exabgp.nix
   ./services/networking/fan.nix
   ./services/networking/firefox/sync-server.nix
   ./services/networking/firewall.nix
@@ -307,6 +308,7 @@
   ./services/networking/mstpd.nix
   ./services/networking/murmur.nix
   ./services/networking/nat.nix
+  ./services/networking/net-snmp.nix
   ./services/networking/networkmanager.nix
   ./services/networking/ngircd.nix
   ./services/networking/nix-serve.nix
@@ -334,6 +336,7 @@
   ./services/networking/seeks.nix
   ./services/networking/skydns.nix
   ./services/networking/shout.nix
+  ./services/networking/snabbswitch
   ./services/networking/softether.nix
   ./services/networking/spiped.nix
   ./services/networking/sslh.nix

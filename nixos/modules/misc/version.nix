@@ -56,7 +56,7 @@ with lib;
     system.defaultChannel = mkOption {
       internal = true;
       type = types.str;
-      default = https://nixos.org/channels/nixos-15.09;
+      default = file:///ALX/channels/nixos-15.09.ALX;
       description = "Default NixOS channel to which the root user is subscribed.";
     };
 

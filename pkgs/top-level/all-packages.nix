@@ -3050,6 +3050,14 @@ let
 
   smbnetfs = callPackage ../tools/filesystems/smbnetfs {};
 
+  snabbswitch = callPackage ../tools/networking/snabbswitch { } ;
+
+  snabbswitchVPN = callPackage ../tools/networking/snabbswitch/vpn.nix { } ;
+
+  snabbSNMPAgents = callPackage ../tools/networking/snabbswitch/snmp-agents.nix { } ;
+
+  snabbPwMIBs = callPackage ../tools/networking/snabbswitch/pw-mibs.nix { } ;
+
   snort = callPackage ../applications/networking/ids/snort { };
 
   solr = callPackage ../servers/search/solr { };
@@ -9036,6 +9044,8 @@ let
   eventstore = callPackage ../servers/nosql/eventstore {
     v8 = v8_3_24_10;
   };
+
+  exabgp = callPackage ../tools/networking/exabgp { };
 
   etcdctl = etcd;
 
