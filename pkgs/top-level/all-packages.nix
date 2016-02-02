@@ -3284,6 +3284,12 @@ let
 
   snabbswitch = callPackage ../tools/networking/snabbswitch { } ;
 
+  snabbswitchVPN = callPackage ../tools/networking/snabbswitch/vpn.nix { } ;
+
+  snabbSNMPAgents = callPackage ../tools/networking/snabbswitch/snmp-agents.nix { } ;
+
+  snabbPwMIBs = callPackage ../tools/networking/snabbswitch/pw-mibs.nix { } ;
+
   sng = callPackage ../tools/graphics/sng {
     libpng = libpng12;
   };
@@ -9563,6 +9569,8 @@ let
   eventstore = callPackage ../servers/nosql/eventstore {
     v8 = v8_3_24_10;
   };
+
+  exabgp = callPackage ../tools/networking/exabgp { };
 
   etcdctl = etcd;
 
