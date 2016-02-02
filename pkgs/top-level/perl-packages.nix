@@ -11112,6 +11112,15 @@ let self = _self // overrides; _self = with self; {
     };
   };
 
+  SysMMap = buildPerlPackage rec {
+    name = "Sys-Mmap-0.17";
+    src = fetchurl {
+      url = "mirror://cpan/authors/id/T/TO/TODDR/${name}.tar.gz";
+      sha256 = "05lqs8d4qsi1ky2k93h3fj6qf3qn52b86yfvv4n87hqmnnhwyx7x";
+    };
+    ## FIXME: add meta
+  };
+
   SysSigAction = buildPerlPackage {
     name = "Sys-SigAction-0.21";
     src = fetchurl {

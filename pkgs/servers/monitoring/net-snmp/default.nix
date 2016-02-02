@@ -25,11 +25,12 @@ stdenv.mkDerivation rec {
       "--with-logfile=/var/log/net-snmpd.log"
       "--with-persistent-directory=/var/lib/net-snmp"
       "--with-openssl=${openssl}"
+      "--enable-ipv6"
     ] ++ stdenv.lib.optional stdenv.isLinux "--with-mnttab=/proc/mounts";
 
   buildInputs = [ autoreconfHook file perl unzip openssl ];
 
-  enableParallelBuilding = true;
+  enableParallelBuilding = false;
 
   postInstall = ''
     for f in $out/lib/*.la $out/bin/net-snmp-config $out/bin/net-snmp-create-v3-user; do
