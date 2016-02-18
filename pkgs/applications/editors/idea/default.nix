@@ -1,6 +1,6 @@
 { stdenv, callPackage, fetchurl, makeDesktopItem, makeWrapper, patchelf
 , coreutils, gnugrep, which, git, python, unzip, p7zip
-, androidsdk, jdk, oraclejdk8
+, androidsdk, jdk
 }:
 
 assert stdenv.isLinux;
@@ -8,12 +8,7 @@ assert stdenv.isLinux;
 let
 
   bnumber = with stdenv.lib; build: last (splitString "-" build);
-  mkIdeaProduct' = callPackage ./common.nix { };
-  mkIdeaProduct = attrs: mkIdeaProduct' ({
-      # After IDEA 15 we can no longer use OpenJDK.
-      # https://youtrack.jetbrains.com/issue/IDEA-147272
-      jdk = if (bnumber attrs.build) < "143" then jdk else oraclejdk8;
-  } // attrs);
+  mkIdeaProduct = callPackage ./common.nix { };
 
   buildAndroidStudio = { name, version, build, src, license, description }:
     let drv = (mkIdeaProduct rec {
@@ -153,14 +148,14 @@ in
 
   android-studio = buildAndroidStudio rec {
     name = "android-studio-${version}";
-    version = "1.5.0.4";
-    build = "141.2422023";
+    version = "1.5.1.0";
+    build = "141.2456560";
     description = "Android development environment based on IntelliJ IDEA";
     license = stdenv.lib.licenses.asl20;
     src = fetchurl {
       url = "https://dl.google.com/dl/android/studio/ide-zips/${version}" +
             "/android-studio-ide-${build}-linux.zip";
-      sha256 = "1sjxs9cq7mdalxmzp6v2gwbg1w8p43c2cp5j4v212w66h5rqv11z";
+      sha256 = "0p6h21jd0xx3xzdrfv9530n1ssyc3xigr3fg33r8ain4k6n02vj6";
     };
   };
 

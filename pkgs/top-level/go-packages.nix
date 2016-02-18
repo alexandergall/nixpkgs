@@ -610,10 +610,10 @@ let
   };
 
   deis = buildFromGitHub {
-    rev = "v1.10.0";
+    rev = "v1.12.2";
     owner = "deis";
     repo = "deis";
-    sha256 = "0qji0dcfqgvjrfn5fjagjib606n24iy9qank2ckh202s75rxx5w9";
+    sha256 = "03lznzcij3gn08kqj2p6skifcdv5aw09dm6zxgvqw7nxx2n1j2ib";
     subPackages = [ "client" ];
     buildInputs = [ docopt-go crypto yaml-v2 ];
     postInstall = ''
@@ -862,6 +862,14 @@ let
     subPackages = [ "./" ];  # don't try to build test fixtures
   };
 
+  git-annex-remote-b2 = buildFromGitHub {
+    buildInputs = [ go go-backblaze ];
+    owner = "encryptio";
+    repo = "git-annex-remote-b2";
+    rev = "v0.2";
+    sha256 = "1139rzdvlj3hanqsccfinprvrzf4qjc5n4f0r21jp9j24yhjs6j2";
+  };
+
   git-appraise = buildFromGitHub {
     rev = "v0.3";
     owner = "google";
@@ -870,10 +878,11 @@ let
   };
 
   git-lfs = buildFromGitHub {
-    rev = "v1.0.0";
+    date = "1.1.1";  # "date" is effectively "version"
+    rev = "v1.1.1";
     owner = "github";
     repo = "git-lfs";
-    sha256 = "1zlg3rm5yxak6d88brffv1wpj0iq4qgzn6sgg8xn0pbnzxjd1284";
+    sha256 = "1m7kii57jrsb22m5x9v8xa3s1qmipfkpk6cscgxrbrj7g0a75fnc";
 
     # Tests fail with 'lfstest-gitserver.go:46: main redeclared in this block'
     excludedPackages = [ "test" ];
@@ -1228,6 +1237,15 @@ let
     propagatedBuildInputs = [ pretty ];
   };
 
+  go-backblaze = buildFromGitHub {
+    buildInputs = [ go-flags go-humanize uilive uiprogress ];
+    goPackagePath = "gopkg.in/kothar/go-backblaze.v0";
+    rev = "373819725fc560fa962c6cd883b533d2ebec4844";
+    owner = "kothar";
+    repo = "go-backblaze";
+    sha256 = "1kmlwfnnfd4h46bb9pz2gw1hxqm1pzkwvidfmnc0zkrilaywk6fx";
+  };
+
   go-bencode = buildGoPackage rec {
     version = "1.1.1";
     name = "go-bencode-${version}";
@@ -1411,6 +1429,13 @@ let
     owner  = "bitly";
     repo   = "go-hostpool";
     sha256 = "14ph12krn5zlg00vh9g6g08lkfjxnpw46nzadrfb718yl1hgyk3g";
+  };
+
+  go-humanize = buildFromGitHub {
+    rev = "8929fe90cee4b2cb9deb468b51fb34eba64d1bf0";
+    owner = "dustin";
+    repo = "go-humanize";
+    sha256 = "1g155kxjh6hd3ibx41nbpj6f7h5bh54zgl9dr53xzg2xlxljgjy0";
   };
 
   go-ini = buildFromGitHub {
@@ -1814,6 +1839,38 @@ let
     };
   };
 
+  hmacauth = buildGoPackage {
+    name = "hmacauth";
+    goPackagePath = "github.com/18F/hmacauth";
+    src = fetchFromGitHub {
+      rev = "9232a6386b737d7d1e5c1c6e817aa48d5d8ee7cd";
+      owner = "18F";
+      repo = "hmacauth";
+      sha256 = "056mcqrf2bv0g9gn2ixv19srk613h4sasl99w9375mpvmadb3pz1";
+    };
+  };
+
+  hound = buildGoPackage rec {
+    rev  = "0a364935ba9db53e6f3f5563b02fcce242e0930f";
+    name = "hound-${stdenv.lib.strings.substring 0 7 rev}";
+    goPackagePath = "github.com/etsy/hound";
+
+    src = fetchFromGitHub {
+      inherit rev;
+      owner  = "etsy";
+      repo   = "hound";
+      sha256 = "0jhnjskpm15nfa1cvx0h214lx72zjvnkjwrbgwgqqyn9afrihc7q";
+    };
+    buildInputs = [ go-bindata.bin pkgs.nodejs pkgs.nodePackages.react-tools pkgs.python pkgs.rsync ];
+    postInstall = ''
+      pushd go
+      python src/github.com/etsy/hound/tools/setup
+      sed -i 's|bin/go-bindata||' Makefile
+      sed -i 's|$<|#go-bindata|' Makefile
+      make
+    '';
+  };
+
   hologram = buildGoPackage rec {
     rev  = "63014b81675e1228818bf36ef6ef0028bacad24b";
     name = "hologram-${stdenv.lib.strings.substring 0 7 rev}";
@@ -1951,8 +2008,12 @@ let
     owner = "ikawaha";
     repo = "kagome";
     sha256 = "1isnjdkn9hnrkp5g37p2k5bbsrx0ma32v3icwlmwwyc5mppa4blb";
+
+    # I disable the parallel building, because otherwise each
+    # spawned compile takes over 1.5GB of RAM.
     buildFlags = "-p 1";
     enableParallelBuilding = false;
+
     goPackagePath = "github.com/ikawaha/kagome";
   };
 
@@ -2332,6 +2393,21 @@ let
     owner  = "beevik";
     repo   = "ntp";
     sha256 = "03fvgbjf2aprjj1s6wdc35wwa7k1w5phkixzvp5n1j21sf6w4h24";
+  };
+
+  oauth2_proxy = buildGoPackage {
+    name = "oauth2_proxy";
+    goPackagePath = "github.com/bitly/oauth2_proxy";
+    src = fetchFromGitHub {
+      rev = "10f47e325b782a60b8689653fa45360dee7fbf34";
+      owner = "bitly";
+      repo = "oauth2_proxy";
+      sha256 = "13f6kaq15f6ial9gqzrsx7i94jhd5j70js2k93qwxcw1vkh1b6si";
+    };
+    buildInputs = [
+      go-assert go-options go-simplejson toml fsnotify.v1 oauth2
+      google-api-go-client hmacauth
+    ];
   };
 
   objx = buildFromGitHub {
@@ -3060,6 +3136,16 @@ let
     ];
   };
 
+  restic = buildFromGitHub {
+    rev    = "4d7e802c44369b40177cd52938bc5b0930bd2be1";
+    date   = "2016-01-17";
+    owner  = "restic";
+    repo   = "restic";
+    sha256 = "0lf40539dy2xa5l1xy1kyn1vk3w0fmapa1h65ciksrdhn89ilrxv";
+    # Using its delivered dependencies. Easier.
+    preBuild = "export GOPATH=$GOPATH:$NIX_BUILD_TOP/go/src/$goPackagePath/Godeps/_workspace";
+  };
+
   rgbterm = buildFromGitHub {
     rev    = "c07e2f009ed2311e9c35bca12ec00b38ccd48283";
     owner  = "aybabtme";
@@ -3395,6 +3481,21 @@ let
     sha256 = "0gkgkw04ndr5y7hrdy0r4v2drs5srwfcw2bs1gyas066hwl84xyw";
   };
 
+  uilive = buildFromGitHub {
+    rev = "1b9b73fa2b2cc24489b1aba4d29a82b12cd0a71f";
+    owner = "gosuri";
+    repo = "uilive";
+    sha256 = "0669f21hd5cw74irrfakdpvxn608cd5xy6s2nyp5kgcy2ijrq4ab";
+  };
+
+  uiprogress = buildFromGitHub {
+    buildInputs = [ uilive ];
+    rev = "fd1c82df78a6c1f5ddbd3b6ec46407ea0acda1ad";
+    owner = "gosuri";
+    repo = "uiprogress";
+    sha256 = "1s61vp2h6n1d8y1zqr2ca613ch5n18rx28waz6a8im94sgzzawp7";
+  };
+
   urlesc = buildFromGitHub {
     rev    = "5fa9ff0392746aeae1c4b37fcc42c65afa7a9587";
     owner  = "opennota";
@@ -3598,5 +3699,39 @@ let
         sort -u |
         xargs -d '\n' sed -i -e s,github.com/ericchiang/pup/Godeps/_workspace/src/,,g
     '';
+  };
+
+  textsecure = buildFromGitHub rec {
+    rev = "505e129c42fc4c5cb2d105520cef7c04fa3a6b64";
+    owner = "janimo";
+    repo = "textsecure";
+    sha256 = "0sdcqd89dlic0bllb6mjliz4x54rxnm1r3xqd5qdp936n7xs3mc6";
+    propagatedBuildInputs = [ crypto protobuf ed25519 yaml-v2 logrus ];
+    disabled = isGo14;
+  };
+
+  interlock = buildFromGitHub rec {
+    version = "2016.01.14";
+    rev = "v${version}";
+    owner = "inversepath";
+    repo = "interlock";
+    sha256 = "0wabx6vqdxh2aprsm2rd9mh71q7c2xm6xk9a6r1bn53r9dh5wrsb";
+    buildInputs = [ crypto textsecure ];
+    nativeBuildInputs = [ pkgs.sudo ];
+    buildFlags = [ "-tags textsecure" ];
+    subPackages = [ "./cmd/interlock" ];
+    postPatch = ''
+      grep -lr '/s\?bin/' | xargs sed -i \
+        -e 's|/bin/mount|${pkgs.utillinux}/bin/mount|' \
+        -e 's|/bin/umount|${pkgs.utillinux}/bin/umount|' \
+        -e 's|/bin/cp|${pkgs.coreutils}/bin/cp|' \
+        -e 's|/bin/mv|${pkgs.coreutils}/bin/mv|' \
+        -e 's|/bin/chown|${pkgs.coreutils}/bin/chown|' \
+        -e 's|/bin/date|${pkgs.coreutils}/bin/date|' \
+        -e 's|/sbin/poweroff|${pkgs.systemd}/sbin/poweroff|' \
+        -e 's|/usr/bin/sudo|/var/setuid-wrappers/sudo|' \
+        -e 's|/sbin/cryptsetup|${pkgs.cryptsetup}/bin/cryptsetup|'
+    '';
+    disabled = isGo14;
   };
 }; in self
