@@ -169,22 +169,34 @@ in
           };
     in listToAttrs (map mkService (partition (inst: inst.enable) cfg.instances).right);
 
-    services.snmpd.agentX = mkIf snmpd-cfg.enable {
-      commonArgs = let
-        mkIfIndexTable = pkgs.writeText "snabb-ifindex"
-          ''${concatStringsSep "\n" (imap (i: v: "${v} ${toString i}") cfg.interfaces)}'';
-      in "--ifindex=${mkIfIndexTable}";
+    services.snmpd = mkIf snmpd-cfg.enable {
+      agentX = {
+        commonArgs = let
+          mkIfIndexTable = pkgs.writeText "snabb-ifindex"
+            ''${concatStringsSep "\n" (imap (i: v: "${v} ${toString i}") cfg.interfaces)}'';
+        in "--ifindex=${mkIfIndexTable}";
 
-      subagents = [
-        rec {
-          name = "interface";
-          executable = pkgs.snabbSNMPAgents + "/bin/${name}";
-          args = "--shmem-dir=${cfg.shmemDir}";
-          modulesInclude = [ "-ifTable" ];
-        }
-      ];
+        subagents = [
+          rec {
+            name = "interface";
+            executable = pkgs.snabbSNMPAgents + "/bin/${name}";
+            args = "--shmem-dir=${cfg.shmemDir}";
+            modulesInclude = [ "-ifTable" ];
+          }
+        ];
+      };
+
+      ## The Snabb SNMP sub-agent uses community "snabb" to read
+      ## sysUpTime in order to be independent of the "public" community.
+      views.sysUpTime = {
+        type = "included";
+        oid = ".1.3.6.1.2.1.1.3";
+      };
+      communities = {
+        ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
+	ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+      };
     };
-
   };
 
 }
