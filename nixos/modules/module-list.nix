@@ -336,7 +336,7 @@
   ./services/networking/seeks.nix
   ./services/networking/skydns.nix
   ./services/networking/shout.nix
-  ./services/networking/snabbswitch
+  ./services/networking/snabb
   ./services/networking/softether.nix
   ./services/networking/spiped.nix
   ./services/networking/sslh.nix
