@@ -363,6 +363,7 @@ in
         description = "SNMP Daemon";
 
         wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
 
         preStart = ''
           mkdir -m 0755 -p ${stateDir}
