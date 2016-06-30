@@ -5,14 +5,14 @@
 ### Each program (snabbnfv, packetblaster, l2vpn etc.)  is defined by
 ### a submodule located in the "programs/<program_name>" subdirectory
 ### and hooks into the main module through the option
-### services.snabbswitch.programs.<program_name>.  This allows each
-### program to define its own NixOS options and supports the definition
-### of independent instances of the program.
+### services.snabb.programs.<program_name>.  This allows each program
+### to define its own NixOS options and supports the definition of
+### independent instances of the program.
 ###
 ### The implementation of a submodule populates
-### services.snabbswitch.instances for every instance of the program
-### that it represents.  Finally, the implementation of the main
-### module creates a systemd service for each of them.
+### services.snabb.instances for every instance of the program that it
+### represents.  Finally, the implementation of the main module
+### creates a systemd service for each of them.
 ###
 ### This is a first shot at how this could be done.  Comments are
 ### very welcome :)
@@ -22,7 +22,7 @@
 with lib;
 
 let
-  cfg = config.services.snabbswitch;
+  cfg = config.services.snabb;
   snmpd-cfg = config.services.snmpd;
 in
 
@@ -34,7 +34,7 @@ in
   imports = [ ./programs/l2vpn ];
 
   options = {
-    services.snabbswitch = {
+    services.snabb = {
       enable = mkOption {
         type = types.bool;
         default = false;
@@ -47,8 +47,8 @@ in
 
       pkg = mkOption {
         type = types.package;
-        default = pkgs.snabbswitch;
-        example = literalExample ''pkgs.snabbswitchVPN'';
+        default = pkgs.snabb;
+        example = literalExample ''pkgs.snabbL2VPN'';
         description = ''
           The package that provides the Snabb switch software, depending on
           which feature set is desired.
@@ -117,7 +117,7 @@ in
       ##   programOptions
       ##     A string of command-line options passed to the program
       ##     being run.  If the string is empty, the global option
-      ##     config.services.snabbswitch.programOptions will be used
+      ##     config.services.snabb.programOptions will be used
       ##     instead
       ##   programArgs
       ##     A string of command-line arguments passed to the program
