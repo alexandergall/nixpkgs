@@ -4,10 +4,11 @@ with pkgs;
 
 buildPerlPackage  rec {
   name = "Snabb-SNMP-0.01";
-  src = fetchgit {
-    url = "https://github.com/alexandergall/snabb-snmp-subagent.git";
-    sha256 = "1zam6wa7wpcanzyqb42kz2jxsycwkrjvszypn8x38saz33nr1fx7";
-    rev = "a648c07a0b4802e4eebd51e8815e442079eb82aa";
+  src = fetchFromGitHub {
+    owner = "alexandergall";
+    repo = "snabb-snmp-subagent";
+    rev = "65b799d9d3aa8d8cf5a9acfa925d548beac16d9a";
+    sha256 = "0409jwxvzzxma2lvkig4nvsq5xi7c4ghdghjd04mchw5wf3jjvn3";
   };
   preConfigure = ''cd subagent'';
   propagatedBuildInputs = with perlPackages; [
