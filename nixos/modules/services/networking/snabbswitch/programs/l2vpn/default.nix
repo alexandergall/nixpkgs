@@ -275,7 +275,7 @@ in
                if tunnel.type == "gre" then
                  let conf = tunnel.config.gre;
                  in '' type = "gre",
-                       ${optionalString (conf.key != null) ''key = ${conf.key}''}
+                       ${optionalString (conf.key != null) ''key = ${conf.key},''}
                        checksum = ${boolToString conf.checksum}
                      ''
                else
