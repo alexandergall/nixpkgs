@@ -4,7 +4,7 @@ with pkgs;
 
 ## Override the standard package to fetch the
 ## "vpn" topic branch.
-snabbswitch.overrideDerivation (origAttrs: {
+snabb.overrideDerivation (origAttrs: {
   name = "snabbswitch-vpn";
   src = fetchgit {
     url = "https://github.com/alexandergall/snabbswitch.git";

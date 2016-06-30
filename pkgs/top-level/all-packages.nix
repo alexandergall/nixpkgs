@@ -3284,13 +3284,11 @@ let
 
   snabb = callPackage ../tools/networking/snabb { } ;
 
-  snabbswitch = callPackage ../tools/networking/snabbswitch { } ;
+  snabbL2VPN = callPackage ../tools/networking/snabb/l2vpn.nix { } ;
 
-  snabbswitchVPN = callPackage ../tools/networking/snabbswitch/vpn.nix { } ;
+  snabbSNMPAgents = callPackage ../tools/networking/snabb/snmp-agents.nix { } ;
 
-  snabbSNMPAgents = callPackage ../tools/networking/snabbswitch/snmp-agents.nix { } ;
-
-  snabbPwMIBs = callPackage ../tools/networking/snabbswitch/pw-mibs.nix { } ;
+  snabbPwMIBs = callPackage ../tools/networking/snabb/pw-mibs.nix { } ;
 
   sng = callPackage ../tools/graphics/sng {
     libpng = libpng12;

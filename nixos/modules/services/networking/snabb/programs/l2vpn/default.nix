@@ -3,8 +3,8 @@
 with lib;
 
 let
-  cfg = config.services.snabbswitch.programs.l2vpn;
-  cfg-snabb = config.services.snabbswitch;
+  cfg = config.services.snabb.programs.l2vpn;
+  cfg-snabb = config.services.snabb;
   cfg-snmpd = config.services.snmpd;
   cfg-exabgp = config.services.exabgp;
   mkSubmodule = module:
@@ -12,7 +12,7 @@ let
 in
 {
   options = {
-    services.snabbswitch.programs.l2vpn = {
+    services.snabb.programs.l2vpn = {
       programOptions = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -34,7 +34,7 @@ in
             ### L2VPN instance configuration options
 
             enable = mkOption {
-	      type = types.bool;
+              type = types.bool;
               default = false;
               description = ''
                 Whether to start this VPLS instance.
@@ -61,7 +61,7 @@ in
               ipv6Address = mkOption {
                 type = types.str;
                 default = "";
-		example = "2001:DB8:0:1::1";
+                example = "2001:DB8:0:1::1";
                 description = ''
                   The IPv6 address of the interface.
                 '';
@@ -77,7 +77,7 @@ in
               nextHop = mkOption {
                 type = types.str;
                 default = "";
-		example = "2001:DB8:0:1::1";
+                example = "2001:DB8:0:1::1";
                 description = ''
                   The IPv6 address of the next hop for all packets
                   that are sent out of the interface.
@@ -157,15 +157,15 @@ in
                     default = 1;
                     description = ''
                       The VC ID assigned to this VPLS instance.  It is advertised through the
-		      control channel (and required to be identical on both sides of a
-		      pseudowire) but not used for multiplexing/demultiplexing of VPN
-		      traffic.
+                      control channel (and required to be identical on both sides of a
+                      pseudowire) but not used for multiplexing/demultiplexing of VPN
+                      traffic.
                     '';
                   };
                   address = mkOption {
                     type = types.str;
                     default = null;
-		    example = "2001:DB8:0:1::1";
+                    example = "2001:DB8:0:1::1";
                     description = ''
                       The IPv6 address which uniquely identifies the VPLS instance.
                     '';
@@ -202,7 +202,7 @@ in
                         address = mkOption {
                           type = types.str;
                           default = null;
-		          example = "2001:DB8:0:1::1";
+                          example = "2001:DB8:0:1::1";
                           description = ''
                             The IPv6 address of the remote end of the tunnel.
                           '';
@@ -214,8 +214,8 @@ in
                     default = {};
                     description = ''
                       Definition of the pseudowires attached to the VPLS instance.  The
-		      pseudowires must be configured as a full mesh between all
-		      endpoints which are part of the same VPLS.
+                      pseudowires must be configured as a full mesh between all
+                      endpoints which are part of the same VPLS.
                     '';
                   };
                 };
@@ -233,10 +233,14 @@ in
 
   config = mkIf cfg-snabb.enable {
 
+    ## Use the l2vpn branch of Snabb to provide the package for the
+    ## service
+    services.snabb.pkg = pkgs.snabbL2VPN;
+
     ## Register each VPLS endpoint as a Snabb instance.
-    ## The implementation of services.snabbswitch will
+    ## The implementation of services.snabb will
     ## generate systemd services from them.
-    services.snabbswitch.instances = let
+    services.snabb.instances = let
       boolToString = val:
         if val then "true" else "false";
 
@@ -253,7 +257,7 @@ in
             }
           ''
         else
-          throw "L2VPN: PCI address ${pciAddress} is not declared in services.snabbswitch.interfaces";
+          throw "L2VPN: PCI address ${pciAddress} is not declared in services.snabb.interfaces";
 
       acConfig = name: ac:
         ''${name} = {
@@ -312,10 +316,10 @@ in
               ${let bridge = vpls.bridge; in if bridge.type == "learning" then
                   let mac = bridge.config.learning.macTable;
                   in ''config = {
-		         mac_table = { verbose = ${boolToString mac.verbose},
+                         mac_table = { verbose = ${boolToString mac.verbose},
                          timeout = ${toString mac.timeout} }
-		       }
-		     ''
+                       }
+                     ''
                 else
                   ""}
              },
