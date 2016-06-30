@@ -3,16 +3,16 @@
 with pkgs;
 
 ## Override the standard package to fetch the
-## "vpn" topic branch.
-snabb.overrideDerivation (origAttrs: {
-  name = "snabbswitch-vpn";
-  src = fetchgit {
-    url = "https://github.com/alexandergall/snabbswitch.git";
-    sha256 = "106gj0vq93ww7r84cp5ff3kaac53gabcwndpnz5kbiy7rg6pzllb";
-    rev = "a4acb5f8c098b7b73c33de4f5a4efb02f463f734";
-    #fetchSubmodules = true;
-    #leaveDotGit = true;
-    #deepClone = true;
+## "l2vpn" topic branch.
+snabb.overrideDerivation (origAttrs: rec {
+  name = "snabb-${version}";
+  version = "l2vpn-v2";
+
+  src = fetchFromGitHub {
+    owner = "snabbco";
+    repo = "snabb";
+    rev = "${version}";
+    sha256 = "0gcmzas66l8pxjfr5bl41n68dcl3q467jwv1va8dkny5pcqwfchz";
   };
   buildInputs = origAttrs.buildInputs ++ [ git ];
   PREFIX = "./";
