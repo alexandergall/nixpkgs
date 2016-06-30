@@ -4,6 +4,13 @@ with lib;
 
 {
   options = {
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Wether to enable the control channel.
+      '';
+    };
     heartbeat = mkOption {
       type = types.int;
       default = 10;
