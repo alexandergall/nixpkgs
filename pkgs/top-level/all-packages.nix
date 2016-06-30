@@ -3050,6 +3050,8 @@ let
 
   smbnetfs = callPackage ../tools/filesystems/smbnetfs {};
 
+  snabb = callPackage ../tools/networking/snabb { } ;
+
   snabbswitch = callPackage ../tools/networking/snabbswitch { } ;
 
   snabbswitchVPN = callPackage ../tools/networking/snabbswitch/vpn.nix { } ;
