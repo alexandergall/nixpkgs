@@ -294,7 +294,7 @@ in
         ''${name} = {
             address = "${pw.address}",
             ${optionalString (pw.tunnel != null) (tunnelConfig pw.tunnel)}
-            ${optionalString (pw.controlChannel != null) (ccConfig pw.controlChannel)}
+            ${optionalString (pw.controlChannel != null && pw.ControlChannel.enable) (ccConfig pw.controlChannel)}
            },
          '';
 
@@ -321,7 +321,7 @@ in
              },
              ${optionalString (length (attrNames vpls.defaultTunnel) != 0)
                               (tunnelConfig vpls.defaultTunnel)}
-             ${optionalString (length (attrNames vpls.defaultControlChannel) != 0)
+             ${optionalString vpls.defaultControlChannel.enable
                               (ccConfig vpls.defaultControlChannel)}
              shmem_dir = "${cfg-snabb.shmemDir}",
              ac = {
