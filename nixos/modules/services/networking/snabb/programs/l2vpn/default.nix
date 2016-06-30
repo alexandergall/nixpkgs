@@ -298,7 +298,7 @@ in
         ''${name} = {
             address = "${pw.address}",
             ${optionalString (pw.tunnel != null) (tunnelConfig pw.tunnel)}
-            ${optionalString (pw.controlChannel != null && pw.ControlChannel.enable) (ccConfig pw.controlChannel)}
+            ${optionalString (pw.controlChannel != null && pw.controlChannel.enable) (ccConfig pw.controlChannel)}
            },
          '';
 
