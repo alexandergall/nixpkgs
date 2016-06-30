@@ -147,7 +147,7 @@ in
 
             wantedBy = [ "multi-user.target" ];
             requires = snmpdService;
-            after = snmpdService;
+            before = snmpdService;
 
             preStart = ''
               for d in ${cfg.stateDir} ${cfg.shmemDir}; do
