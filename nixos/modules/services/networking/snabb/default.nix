@@ -87,16 +87,40 @@ in
       };
 
       interfaces = mkOption {
-        type = types.listOf types.str;
         default = [];
         example = literalExample ''[ "0000:04:00.0" "0000:04:00.1" ]'';
         description = ''
-          List of PCI addresses of NICs available for Snabb processes.  Snabb
-          programs may use this to check the validity of PCI addresses within
-          their own configurations.  The list is also used to generate a static
-          mapping to interface indexes in the context of the SNMP interface MIBs.
-          For that purpose, the interfaces are numbered sequentially starting from 1.
+          A list of interface definitions which map names to PCI devices.
         '';
+        type = types.listOf (types.submodule {
+          options = {
+            name = mkOption {
+              type = types.str;
+              description = ''
+                The name of the interface.  This can be an arbitrary string
+                which uniquely identifies the interface in the list
+                <option>services.snabb.interfaces</option>.  The current
+                convention is to use the full PCI address as the name of
+                the interface but this may change in the future.  It is
+                important to note that it is this name which is used to
+                identify the interface within network management protocols
+                such as SNMP (where the name is stored in the ifDescr object)
+                and not the PCI address. A persistent mapping of interface
+                names to integers is created from the list
+                <option>services.snabb.interfaces</option> by assigning numbers
+                to subsequent interfaces in the list, starting with 1.  In
+                the context of SNMP, these numbers are used as the ifIndex to
+                identify each interface in the relevant MIBs.
+              '';
+            };
+            pciAddress = mkOption {
+              type = types.str;
+              description = ''
+                The PCI address of the interface.
+              '';
+            };
+          };
+        });
       };
 
       ## This array is populated by the program modules.  It is used to
@@ -167,14 +191,27 @@ in
               Group = "root";
             };
           };
-    in listToAttrs (map mkService (partition (inst: inst.enable) cfg.instances).right);
+    in listToAttrs (map mkService (partition (inst: inst.enable)
+                                             cfg.instances).right);
 
     services.snmpd = mkIf snmpd-cfg.enable {
       agentX = {
         commonArgs = let
+          isUnique = l:
+            length l == length (unique l);
+          names = map (s: s.name) cfg.interfaces;
+          addrs = map (s: s.pciAddress) cfg.interfaces;
           mkIfIndexTable = pkgs.writeText "snabb-ifindex"
-            ''${concatStringsSep "\n" (imap (i: v: "${v} ${toString i}") cfg.interfaces)}'';
-        in "--ifindex=${mkIfIndexTable}";
+            ''${concatStringsSep "\n" (imap (i: v: "${v} ${toString i}")
+                                      names)}'';
+        in
+          if isUnique names then
+            if isUnique addrs then
+              "--ifindex=${mkIfIndexTable}"
+            else
+              throw "PCI addresses in services.snabb.interfaces are not unique"
+          else
+              throw "names in services.snabb.interfaces are not unique";
 
         subagents = [
           rec {
