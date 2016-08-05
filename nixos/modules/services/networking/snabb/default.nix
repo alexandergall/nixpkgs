@@ -122,6 +122,14 @@ in
           };
         });
       };
+      subInterfaces = mkOption {
+        default = [];
+        description = ''
+          A list of names of sub-interfaces for which additional ifIndex
+          mappings will be created.  This is a private option and is
+          populated by the program modules.
+        '';
+      };
 
       ## This array is populated by the program modules.  It is used to
       ## generate systemd services in the implementation below.  Each entry
@@ -201,9 +209,11 @@ in
             length l == length (unique l);
           names = map (s: s.name) cfg.interfaces;
           addrs = map (s: s.pciAddress) cfg.interfaces;
+          ifIndexNext = (length names) + 1;
           mkIfIndexTable = pkgs.writeText "snabb-ifindex"
-            ''${concatStringsSep "\n" (imap (i: v: "${v} ${toString i}")
-                                      names)}'';
+            ''${concatStringsSep "\n"
+                                 (imap (i: v: "${v} ${toString i}")
+                                       (names ++ cfg.subInterfaces))}'';
         in
           if isUnique names then
             if isUnique addrs then
