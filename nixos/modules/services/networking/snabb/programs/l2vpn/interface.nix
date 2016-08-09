@@ -3,15 +3,7 @@
 with lib;
 
 let
-  addressFamiliesOption = {}:
-    {
-        default = null;
-        description = ''
-          An optional set of address family configurations.  Providing
-          this option designates the subinterface as a L3 interface.
-          Currently, only ipv6 is supported.
-        '';
-        type = types.nullOr (types.submodule {
+  addressFamiliesModule = types.submodule {
           options = {
             ipv6 = mkOption {
               default = null;
@@ -67,11 +59,15 @@ let
               });
             }; # ipv6
           };
-        });
-    };
+        };
 in
 {
   options = {
+    foo = mkOption {
+      type = types.bool;
+      default = null;
+      description = "";
+    };
     name = mkOption {
       type = types.str;
       default = null;
@@ -137,7 +133,16 @@ in
         included in the MTU.
       '';
     };
-    addressFamilies = mkOption (addressFamiliesOption {});
+    addressFamilies = mkOption {
+      default = null;
+      description = ''
+        An optional set of address family configurations.  Providing
+        this option designates the physical interface as a L3 interface.
+        Currently, only ipv6 is supported.  This option is only allowed
+        if tunking is disabled.
+      '';
+      type = types.nullOr addressFamiliesModule;
+    };
     trunk = {
       enable = mkOption {
         type = types.bool;
@@ -184,7 +189,15 @@ in
                 to which all untagged packets are assigned.
               '';
             };
-            addressFamilies = mkOption (addressFamiliesOption {});
+            addressFamilies = mkOption {
+              default = null;
+              description = ''
+                An optional set of address family configurations.  Providing
+                this option designates the sub-interface as a L3 interface.
+                Currently, only ipv6 is supported.
+              '';
+              type = types.nullOr addressFamiliesModule;
+            };
           }; # options
         });
       };
@@ -200,4 +213,5 @@ in
       '';
     };
   }; # options
+
 }

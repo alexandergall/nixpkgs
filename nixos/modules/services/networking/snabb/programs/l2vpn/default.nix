@@ -228,54 +228,61 @@ in
 
       acConfig = name: ac:
         ''
-
-          ${name} = "${ac}",'';
+          ${name} = "${ac}",
+        '';
 
       tunnelConfig = tunnel:
         ''
-
           tunnel = {
-            ${(indentBlock 2)
-              (if tunnel.type == "l2tpv3" then
-                 let conf = tunnel.config.l2tpv3; in
-                 ''
-
-                   type = "l2tpv3",
-                   local_cookie = "${conf.localCookie}",
-                   remote_cookie = "${conf.remoteCookie}"''
-               else
-                 if tunnel.type == "gre" then
-                   let conf = tunnel.config.gre; in
-                   ''
-
-                     type = "gre",
-                     ${optionalString (conf.key != null) ''key = ${conf.key},''}
-                     checksum = ${boolToString conf.checksum},''
-                 else
-                   "")}
-          },'';
+        '' +
+        (indentBlock 2
+        (if tunnel.type == "l2tpv3" then
+           let conf = tunnel.config.l2tpv3; in
+           ''
+             type = "l2tpv3",
+             local_cookie = "${conf.localCookie}",
+             remote_cookie = "${conf.remoteCookie}"
+           ''
+         else # type "gre"
+           let conf = tunnel.config.gre; in
+           ''
+             type = "gre",
+           '' +
+           optionalString (conf.key != null)
+             (''key = ${conf.key},'' + "\n") +
+           ''
+             checksum = ${boolToString conf.checksum},
+           '')) +
+        ''
+          }, -- tunnel
+        '';
 
       ccConfig = cc:
         ''
-
           cc = {
             heartbeat = ${toString cc.heartbeat},
             dead_factor = ${toString cc.deadFactor}
-          },'';
+          }, -- cc
+        '';
 
       pwConfig = name: pw:
         ''
-
           ${name} = {
             address = "${pw.address}",
-            ${optionalString (pw.tunnel != null)
-                             ((indentBlock 2)
-                              (tunnelConfig pw.tunnel))}
-            ${optionalString (pw.controlChannel != null &&
-                              pw.controlChannel.enable)
-                              ((indentBlock 2)
-                               (ccConfig pw.controlChannel))}
-          },'';
+        '' +
+        optionalString (pw.tunnel != null)
+                       (indentBlock 2
+                        (tunnelConfig pw.tunnel)) +
+        (let cc = pw.controlChannel; in
+         optionalString (cc != null)
+           (indentBlock 2 (ccConfig (pw.controlChannel //
+                          (if cc.enable then
+                             {}
+                           else
+                             { heartbeat = 0; }))))) +
+        ''
+          },
+        '';
 
       mkConfigIterator = attr: f:
         set:
@@ -287,7 +294,6 @@ in
 
       vplsConfig = name: vpls:
         ''
-
           ${name} = {
             description = "${vpls.description}",
             uplink = "${vpls.uplink}",
@@ -296,64 +302,82 @@ in
             address = "${vpls.address}",
             bridge = {
               type = "${vpls.bridge.type}",
-              ${let bridge = vpls.bridge; in
-                if bridge.type == "learning" then
-                  let mac = bridge.config.learning.macTable; in
-                  (indentBlock 4)
-                  ''
+        '' +
+        (let bridge = vpls.bridge; in
+        if bridge.type == "learning" then
+          let mac = bridge.config.learning.macTable; in
+          (indentBlock 4
+          ''
+            config = {
+              ac_table = {
+                verbose = ${boolToString mac.verbose},
+                timeout = ${toString mac.timeout}
+              },
+            },
+          '')
+        else
+          "") +
+        (indentBlock 2
+        ''
+          }, --bridge
+        '') +
+        (indentBlock 2 (tunnelConfig vpls.defaultTunnel)) +
+        (optionalString vpls.defaultControlChannel.enable
+                        (indentBlock 2 (ccConfig vpls.defaultControlChannel))) +
+        (indentBlock 2
+        ''
+          shmem_dir = "${cfg-snabb.shmemDir}",
+          ac = {
+        '') +
+        (indentBlock 4
+         ((mkConfigIterator "attachmentCircuits" acConfig) vpls)) +
+        (indentBlock 2
+        ''
+          },
+          pw = {
+        '') +
+        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls)) +
+        ''
+            }, -- pw
+          }, -- vpls ${name}
+        '';
 
-                    config = {
-                      ac_table = { verbose = ${boolToString mac.verbose},
-                                   timeout = ${toString mac.timeout} },
-                    },''
-                else
-                  ""}
-            },
-            ${optionalString (length (attrNames vpls.defaultTunnel) != 0)
-                              ((indentBlock 2)
-                               (tunnelConfig vpls.defaultTunnel))}
-            ${optionalString vpls.defaultControlChannel.enable
-                               ((indentBlock 2)
-                                (ccConfig vpls.defaultControlChannel))}
-            shmem_dir = "${cfg-snabb.shmemDir}",
-            ac = { ${(indentBlock 4)
-                     ((mkConfigIterator "attachmentCircuits" acConfig) vpls)}
-            },
-            pw = { ${(indentBlock 4)
-                     ((mkConfigIterator "pseudowires" pwConfig) vpls)}
-            },
-          },'';
+      addressFamiliesConfig = conf:
+        ''
+          afs = {
+        '' +
+        (if hasAttr "ipv6" conf.addressFamilies then
+            let ipv6 = conf.addressFamilies.ipv6; in
+            (indentBlock 2
+             ''
+               ipv6 = {
+                 address = "${ipv6.address}",
+                 next_hop = "${ipv6.nextHop}",
+             '') +
+             optionalString (ipv6.nextHopMacAddress != null)
+               (indentBlock 4
+                ''neighbor_mac = "${ipv6.nextHopMacAddress}",'' + "\n") +
+             (indentBlock 2
+             ''
+                 neighbor_nd = ${boolToString ipv6.enableInboundND},
+               },
+             '')
+          else
+            throw ("no valid address family found for"
+                    + " subinterface ${subint}")) +
+        ''}, -- afs'';
 
       vlansConfig = conf:
         ''
-
           {
             description = "${conf.description}",
             vid = ${toString conf.vid},
-            ${optionalString (conf.addressFamilies != null)
-                ((indentBlock 2)
-                ''
-
-                  l3 = {
-                    ${if hasAttr "ipv6" conf.addressFamilies then
-                        let ipv6 = conf.addressFamilies.ipv6; in
-                        ((indentBlock 2) 
-                         ''
-
-                           ipv6 = {
-                             address = "${ipv6.address}",
-                             next_hop = "${ipv6.nextHop}",
-                             ${optionalString (ipv6.nextHopMacAddress != null)
-                                 ''neighbor_mac = "${conf.nextHopMacAddress}",''}
-                             neighbor_nd = ${boolToString ipv6.enableInboundND},
-                           },
-                         '')
-                      else
-                        throw ("no valid address family found for"
-                                + " subinterface ${subint}")}
-                  },
-                '')}
-          },'';
+        '' +
+        optionalString (conf.addressFamilies != null)
+          (indentBlock 2 ''${addressFamiliesConfig conf}'' + "\n") +
+        ''
+          }, -- vlan
+        '';
 
       interfaceConfig = intf:
         let
@@ -363,7 +387,6 @@ in
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
              ''
-
                {
                  name = "${intf.name}",
                  ${optionalString (intf.description != null)
@@ -377,23 +400,30 @@ in
                    },
                  },
                  mtu = ${toString intf.mtu},
-                 ${optionalString (intf.macAddress != null)
-                     ''mac = "${intf.macAddress}",''}
-                 trunk = {
-                   enable = ${boolToString intf.trunk.enable},
-                   encapsulation = ${
-                     let enc = intf.trunk.encapsulation; in
-                     if (enc == "dot1q" || enc == "dot1ad") then
-                       ''"${enc}"''
-                     else
-                       enc},
-                   vlans = {
-                     ${(indentBlock 6)
-                       ((mkConfigIterator "vlans" vlansConfig)
-                           intf.trunk)}
-                   },
-                 },
-               },''
+             '' +
+             optionalString (intf.macAddress != null)
+               (indentBlock 2 ''mac = "${intf.macAddress}",'' + "\n") +
+             optionalString (intf.addressFamilies != null)
+               (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
+             (indentBlock 2
+             ''
+               trunk = {
+                 enable = ${boolToString intf.trunk.enable},
+                 encapsulation = ${
+                   let enc = intf.trunk.encapsulation; in
+                   if (enc == "dot1q" || enc == "dot1ad") then
+                     ''"${enc}"''
+                   else
+                     enc},
+                 vlans = {
+             '') +
+             ((indentBlock 6 ((mkConfigIterator "vlans" vlansConfig)
+                                                intf.trunk))) +
+             ''
+                   }, -- vlans
+                 }, -- trunk
+               }, -- interface ${intf.name}
+             ''
            else
              throw ("L2VPN: the interface named ${intf.name} is not"
                     + " declared in services.snabb.interfaces");
@@ -402,17 +432,22 @@ in
         let
           uplink = config.uplink;
         in pkgs.writeText "l2vpn-${name}"
-          ''
+         (''
             return {
-              interfaces = { ${(indentBlock 4)
-                              ((mkConfigIterator "interfaces" interfaceConfig)
-                                                  cfg)}
-              },
-              vpls = { ${(indentBlock 4)
-                         ((mkConfigIterator "vpls" vplsConfig) config)}
-              }
+              interfaces = {
+          '' +
+          (indentBlock 4 ((mkConfigIterator "interfaces" interfaceConfig)
+                                            cfg)) +
+          (indentBlock 2
+          ''
+            }, -- interfaces
+            vpls = {
+          '') +
+          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config)) +
+          ''
+              } -- vpls
             }
-          '';
+          '');
 
       mkL2VPNService = name: config: {
         name = "snabb-l2vpn-" + name;
