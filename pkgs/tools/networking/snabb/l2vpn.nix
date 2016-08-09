@@ -6,7 +6,7 @@ with pkgs;
 ## "l2vpn" topic branch.
 snabb.overrideDerivation (origAttrs: rec {
   name = "snabb-${version}";
-  version = "l2vpn-v2";
+  version = "l2vpn-v3";
 
   src = fetchFromGitHub {
     owner = "snabbco";

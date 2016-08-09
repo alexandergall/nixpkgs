@@ -2,7 +2,7 @@
 
 stdenv.mkDerivation rec {
   name = "snabb-${version}";
-  version = "2016.04";
+  version = "2016.08";
 
   src = fetchFromGitHub {
     owner = "snabbco";
