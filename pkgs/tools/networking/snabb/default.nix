@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
     owner = "snabbco";
     repo = "snabb";
     rev = "v${version}";
-    sha256 = "1b5g477zy6cr5d9171xf8zrhhq6wxshg4cn78i5bki572q86kwlx";
+    sha256 = "0dl8q5s01y62js62an22h6vla4xf7ln3i2ky06x6p4v23dcffj4p";
   };
 
   buildInputs = [ makeWrapper ];
