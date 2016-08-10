@@ -88,7 +88,14 @@ in
 
       interfaces = mkOption {
         default = [];
-        example = literalExample ''[ "0000:04:00.0" "0000:04:00.1" ]'';
+        example = literalExample
+          ''
+            [ { name = "TenGigE0/0";
+                pciAddress = "0000:04:00.0"; }
+              { name = "TenGigE0/1";
+                pciAddress = "0000:04:00.1"; }
+            ]
+          '';
         description = ''
           A list of interface definitions which map names to PCI devices.
         '';
@@ -97,26 +104,32 @@ in
             name = mkOption {
               type = types.str;
               description = ''
-                The name of the interface.  This can be an arbitrary string
-                which uniquely identifies the interface in the list
-                <option>services.snabb.interfaces</option>.  The current
-                convention is to use the full PCI address as the name of
-                the interface but this may change in the future.  It is
-                important to note that it is this name which is used to
-                identify the interface within network management protocols
-                such as SNMP (where the name is stored in the ifDescr object)
-                and not the PCI address. A persistent mapping of interface
-                names to integers is created from the list
-                <option>services.snabb.interfaces</option> by assigning numbers
-                to subsequent interfaces in the list, starting with 1.  In
-                the context of SNMP, these numbers are used as the ifIndex to
-                identify each interface in the relevant MIBs.
+                The name of the interface.  This can be an arbitrary
+                string which uniquely identifies the interface in the
+                list <option>services.snabb.interfaces</option>.  If
+                VLAN-based sub-interfaces are used, the name must not
+                contain any dots.  Otherwise, the operator is free to
+                chose any suitable naming convention.  It is important
+                to note that it is this name which is used to identify
+                the interface within network management protocols such
+                as SNMP (where the name is stored in the ifDescr and
+                ifName objects) and not the PCI address. A persistent
+                mapping of interface names to integers is created from
+                the lists <option>services.snabb.interfaces</option>
+                and <option>services.snabb.subInterfaces</option> by
+                assigning numbers to subsequent interfaces in the
+                list, starting with 1.  In the context of SNMP, these
+                numbers are used as the ifIndex to identify each
+                interface in the relevant MIBs.
               '';
             };
             pciAddress = mkOption {
               type = types.str;
+              example = "0000:01:00.0";
               description = ''
-                The PCI address of the interface.
+                The PCI address of the interface in standard
+                "geographical notation"
+                (<literal>&lt;domain&gt;:&lt;bus&gt;:&lt;device&gt;.&lt;function&gt;</literal>)
               '';
             };
           };
