@@ -25,6 +25,53 @@ in
       };
       interfaces = mkOption {
         default = [];
+        example = literalExample
+          ''
+            [ {
+                name = "TenGigE0/0";
+                description = "VPNTP uplink";
+                driver = {
+                  path = "apps.intel.intel_app";
+                  name = "Intel82599";
+                };
+                addressFamilies = {
+                  ipv6 = {
+                    address = "2001:db8:0:1:0:0:0:2";
+                    nextHop = "2001:db8:0:1:0:0:0:1";
+                  };
+                };
+                trunk = { enable = false; };
+              }
+              {
+                name = "TenGigE0/1";
+                description = "VPNTP uplink";
+                driver = {
+                  path = "apps.intel.intel_app";
+                  name = "Intel82599";
+                };
+                trunk = {
+                  enable = true;
+                  encapsulation = "dot1q";
+                  vlans = [
+                    {
+                      description = "AC";
+                      vid = 100;
+                    }
+                    {
+                      description = "VPNTP uplink#2";
+                      vid = 200;
+                      addressFamilies = {
+                        ipv6 = {
+                          address = "2001:db8:0:2:0:0:0:2";
+                          nextHop = "2001:db8:0:2:0:0:0:1";
+                        };
+                      };
+                    }
+                  ];
+                };
+              }
+            ]
+          '';
         description = ''
           A list of interface definitions.
         '';
@@ -34,7 +81,7 @@ in
       instances = mkOption {
         default = {};
         description = ''
-          Set of definitions of L2VPN termination points.
+          Set of definitions of L2VPN termination points (VPNTP).
         '';
         example = literalExample ''TBD'';
         type = types.attrsOf (types.submodule {
@@ -46,7 +93,7 @@ in
               type = types.bool;
               default = false;
               description = ''
-                Whether to start this VPLS instance.
+                Whether to start this VPNTP instance.
               '';
             };
 
@@ -62,37 +109,33 @@ in
 
             vpls = let
               tunnelOption = { maybeNull ? false,
-                               default ? { type = "l2tpv3"; } }: {
+                               default ? { type = "l2tpv3"; },
+                               description }: {
                 type = (if maybeNull then types.nullOr else id)
                        (mkSubmodule ./tunnel.nix);
-                inherit default;
-                example = literalExample ''
-                  { type = "l2tpv3";
-                    config.l2tpv3 = {
-                      localCookie = "\x00\x11\x22\x33\x44\x55\x66\x77";
-                      remoteCookie = "\x00\x11\x22\x33\x44\x55\x66\x77";
-                    };
-                  }
-                '';
-                description = ''
-                  The configuration of the tunnel used by a pseudowire.
-                '';
+                example = literalExample
+                  ''
+                    { type = "l2tpv3";
+                      config.l2tpv3 = {
+                        localCookie = "\x00\x11\x22\x33\x44\x55\x66\x77";
+                        remoteCookie = "\x00\x11\x22\x33\x44\x55\x66\x77";
+                      };
+                    }
+                  '';
+                inherit default description;
               };
               controlChannelOption = { maybeNull ? false,
                                        default ? { heartbeat = 10;
-                                                   deadFactor = 3; } }: {
+                                                   deadFactor = 3; },
+                                       description }: {
                 type = (if maybeNull then types.nullOr else id)
                        (mkSubmodule ./control-channel.nix);
-                inherit default;
-                example = literalExample ''
-                  default = {
-                    heartbeat = 10;
-                    deadFactor = 3;
-                  };
-                '';
-                description = ''
-                  The configuration of the control-channel.
-                '';
+                example = literalExample
+                  ''
+                    { heartbeat = 10;
+                      deadFactor = 3; }
+                  '';
+                inherit default description;
               };
             in mkOption {
               default = {};
@@ -110,23 +153,29 @@ in
                   };
                   uplink = mkOption {
                     type = types.str;
+                    example = "TenGigE0/0.100";
                     description = ''
-                      A reference to a L3 interface which is used to send
-                      and receive encapsulated packets in the form
-                      &lt;interface&gt;.&lt;subinterface&gt;, where
-                      interface must refer to one of the attributes in the
-                      <option>interfaces</option> option and subinterface
-                      must refer to an existing entry in the interface's l3
-                      attribute set.
+                      The name of a L3 interface which is used to send
+                      and receive encapsulated packets.  The named
+                      interface must exist in the
+                      <option>interfaces</option> option of the VPNTP
+                      instance.
                     '';
                   };
                   mtu = mkOption {
                     type = types.int;
                     default = null;
+                    example = 1514;
                     description = ''
-                      The MTU of the uplink interface.  This value will be
-                      advertised to all remote pseudowire endpoints over
-                      the control-channel, if enabled.
+                      The MTU in bytes of the VPLS instance, including
+                      the entire Ethernet header (in particular, any
+                      VLAN tags used by the client, i.e. "non
+                      service-delimiting tags").  The MTU must be
+                      consistent across the entire VPLS.  If the
+                      control-channel is enabled, this value is
+                      announced to the remote pseudowire endpoints and
+                      a mismatch of local and remote MTUs will result
+                      in the pseudowire being disabled.
                     '';
                   };
                   vcID = mkOption {
@@ -148,25 +197,53 @@ in
                       instance.
                     '';
                   };
-                  defaultTunnel = mkOption (tunnelOption {});
-                  defaultControlChannel = mkOption (controlChannelOption {});
+                  defaultTunnel = mkOption (tunnelOption {
+                    description = ''
+                      The default tunnel configuration for pseudowires.  This
+                      can be overriden in the per-pseudowire configurations.
+                    ''; });
+                  defaultControlChannel = mkOption (controlChannelOption {
+                    description =
+                      ''
+                        The default control-channel configuration for
+                        pseudowires.  This can be overriden in the
+                        per-pseudowire configurations.
+                      ''; });
                   bridge = mkOption {
+                    default = { type = "learning"; };
+                    example = literalExample
+                      ''
+                        {
+                          type = "learning";
+                          config.learning = {
+                            macTable = {
+                              verbose = false;
+                              timeout = 30;
+                            };
+                          };
+                        }
+                      '';
                     type = mkSubmodule ../../modules/bridge.nix;
                     description = ''
-                      Bridge configuration.
+                      The configuration of the bridge module for a
+                      multi-point VPN.
                     '';
                   };
                   attachmentCircuits = mkOption {
                     type = types.attrsOf types.str;
                     default = {};
+                    example = literalExample
+                      ''
+                        { ac1 = "TenGigE0/0";
+                          ac2 = "TenGigE0/1.100"; }
+                      '';
                     description = ''
-                      An attribute set that defines all attachment circuits
-                      which will be part of the VPLS instance.  Each AC
-                      is defined as a string of the form
-                      &lt;interface&gt;.&lt;subinterface&gt;, where
-                      interface must refer to one of the attributes in the
-                      <option>interfaces</option> option and subinterface
-                      must refer to one of its L2 subinterfaces.
+                      An attribute set that defines all attachment
+                      circuits which will be part of the VPLS
+                      instance.  Each AC must refer to the name of a
+                      L2 interface defined in the
+                      <option>interfaces</option> option of the VPNTP
+                      instance.
                     '';
                   };
                   pseudowires = mkOption {
@@ -180,14 +257,43 @@ in
                             The IPv6 address of the remote end of the tunnel.
                           '';
                         };
-                        tunnel = mkOption (tunnelOption { maybeNull = true;
-                                                          default = null; });
+                        tunnel = mkOption (tunnelOption
+                          { maybeNull = true;
+                            default = null;
+                            description = ''
+                              The configuration of the tunnel for this pseudowire.
+                              This overrides the default tunnel configuration for
+                              the VPLS instance.
+                            ''; });
                         controlChannel = mkOption (controlChannelOption
-                                                     { maybeNull = true;
-                                                       default = null; });
+                          { maybeNull = true;
+                            default = null;
+                            description =
+                              ''
+                                The configuration of the control-channel of this
+                                pseudowire.  This overrides the default
+                                control-channel configuration for the VPLS instance
+                              ''; });
                       };
                     });
                     default = {};
+                    example = literalExample
+                      ''
+                        { pw1 = {
+                            address = "2001:db8:0:1::1";
+                            tunnel = {
+                              type = "gre";
+                            };
+                            controlChannel = { enable = false; };
+                          };
+                          pw2 = {
+                            address = "2001:db8:0:2::1";
+                            tunnel = {
+                              type = "l2tpv3";
+                            };
+                          };
+                        }
+                      '';
                     description = ''
                       Definition of the pseudowires attached to the VPLS
                       instance.  The pseudowires must be configured as a full
