@@ -7,6 +7,15 @@ let
           options = {
             ipv6 = mkOption {
               default = null;
+              example = literalExample
+                ''
+                  {
+                    ipv6 = {
+                      address = "2001:db8:0:1::2";
+                      nextHop = "2001:db8:0:1::1";
+                    };
+                  }
+                '';
               description = ''
                 An optional IPv6 configuration of the subinterface.
               '';
@@ -63,29 +72,17 @@ let
 in
 {
   options = {
-    foo = mkOption {
-      type = types.bool;
-      default = null;
-      description = "";
-    };
     name = mkOption {
       type = types.str;
       default = null;
-      example = literalExample ''name = "0000:03:00.1"'';
+      example = "TenGigE0/0";
       description = ''
-        The system-wide unique name of the interface.  On conventional
-        network devices, this is typicially something like
-        <literal>&lt;type&gt;&lt;slot&gt;/&lt;number&gt;</literal>,
-        e.g. TenGigabitEthernet3/2.  By convention, the Snabb system
-        currently uses the full PCI address of the NIC.  However, the
-        name is not derived from the actual PCI address as used in the
-        configuration of the driver to accomodate futurue conventions,
-        which might not be tied to the PCI address.  An error is thrown
-        if the name does not occur in the list of option
-        <option>services.snabb.interfaces</option>.  That list is used
-        to generate a persistent mapping of interface names to interface
-        indices used, for example, for SNMP.  This implies that the name
-        is stored in the ifDesc SNMP object.
+        The system-wide unique name of the interface.  It must exist
+        in the global list of inerfaces in the
+        <option>services.snabb.interfaces</option> option, where the
+        PCI address associated with the device is stored.  This name
+        is stored in the ifDescr and ifName SNMP objects if SNMP is
+        enabled for the interface.
       '';
     };
     description = mkOption {
@@ -100,7 +97,7 @@ in
     driver = {
       path = mkOption {
         type = types.str;
-        example = literalExample ''apps.intel.intel_app'';
+        example = "apps.intel.intel_app";
         description = ''
           The path of the Lua module in which the driver resides.
         '';
@@ -125,7 +122,6 @@ in
     mtu = mkOption {
       type = types.int;
       default = 1514;
-      example = 9014;
       description = ''
         The MTU of the interface in bytes, including the full Ethernet
         header.  In particular, if the interface is configured as
@@ -139,7 +135,7 @@ in
         An optional set of address family configurations.  Providing
         this option designates the physical interface as a L3 interface.
         Currently, only ipv6 is supported.  This option is only allowed
-        if tunking is disabled.
+        if trunking is disabled.
       '';
       type = types.nullOr addressFamiliesModule;
     };
@@ -155,7 +151,7 @@ in
         type = types.either (types.enum [ "dot1q" "dot1ad" ])
                             types.str;
         default = "dot1q";
-        example = literalExample ''encapsulation = "0x9100";'';
+        example = "0x9100";
         description = ''
           The encapsulation used on the VLAN trunk (ignored if
           trunking is disabled), either "dot1q" or "dot1ad" or an
@@ -168,6 +164,20 @@ in
       };
       vlans = mkOption {
         default = [];
+        example = literalExample
+          ''
+            [ { description = "VLAN100";
+                vid = 100; }
+              { description = "VLAN200";
+                vid = 200;
+                addressFamilies = {
+                  ipv6 = {
+                    address = "2001:db8:0:1::2";
+                    nextHop = "2001:db8:0:1::1";
+                  };
+                }; }
+             ]
+          '';
         description = ''
           A list of vlan defintions.
         '';
@@ -205,7 +215,7 @@ in
     macAddress = mkOption {
       type = types.nullOr types.str;
       default = null;
-      example = literalExample ''"00:00:00:01:02:03"'';
+      example = "00:00:00:01:02:03";
       description = ''
         The physical MAC address of the interface.  This is
         currently required if L3 subinterfaces are present
