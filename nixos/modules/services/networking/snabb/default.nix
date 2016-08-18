@@ -86,54 +86,94 @@ in
         '';
       };
 
+      snmp = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Whether to enable SNMP for interfaces.  Currently, SNMP is enabled
+            unconditionally for pseudowires.
+          '';
+        };
+        interval = mkOption {
+          type = types.int;
+          default = 5;
+          description = ''
+            The interval in seconds in which the SNMP objects exported
+            via shared memory segments to the SNMP sub-agents are
+            synchronized with the underlying data sources such as
+            interface counters.
+          '';
+        };
+      };
+
       interfaces = mkOption {
         default = [];
         example = literalExample
           ''
-            [ { name = "TenGigE0/0";
-                pciAddress = "0000:04:00.0"; }
-              { name = "TenGigE0/1";
-                pciAddress = "0000:04:00.1"; }
+            [ {
+                name = "TenGigE0/0";
+                description = "VPNTP uplink";
+                pciAddress = "0000:04:00.0";
+                driver = {
+                  path = "apps.intel.intel_app";
+                  name = "Intel82599";
+                };
+                mtu = 1514;
+                addressFamilies = {
+                  ipv6 = {
+                    address = "2001:db8:0:1:0:0:0:2";
+                    nextHop = "2001:db8:0:1:0:0:0:1";
+                  };
+                };
+                trunk = { enable = false; };
+              }
+              {
+                name = "TenGigE0/1";
+                description = "VPNTP uplink";
+                pciAddress = "0000:04:00.1";
+                driver = {
+                  path = "apps.intel.intel_app";
+                  name = "Intel82599";
+                };
+                mtu = 9018;
+                trunk = {
+                  enable = true;
+                  encapsulation = "dot1q";
+                  vlans = [
+                    {
+                      description = "AC";
+                      vid = 100;
+                    }
+                    {
+                      description = "VPNTP uplink#2";
+                      vid = 200;
+                      addressFamilies = {
+                        ipv6 = {
+                          address = "2001:db8:0:2:0:0:0:2";
+                          nextHop = "2001:db8:0:2:0:0:0:1";
+                        };
+                      };
+                    }
+                  ];
+                };
+              }
+              { name = "Tap1";
+                description = "AC";
+                driver = {
+                  path = "apps.tap.tap";
+                  name = "Tap";
+                  literalConfig = "Tap1";
+                };
+                mtu = 1514;
+              }
             ]
           '';
         description = ''
           A list of interface definitions which map names to PCI devices.
         '';
-        type = types.listOf (types.submodule {
-          options = {
-            name = mkOption {
-              type = types.str;
-              description = ''
-                The name of the interface.  This can be an arbitrary
-                string which uniquely identifies the interface in the
-                list <option>services.snabb.interfaces</option>.  If
-                VLAN-based sub-interfaces are used, the name must not
-                contain any dots.  Otherwise, the operator is free to
-                chose any suitable naming convention.  It is important
-                to note that it is this name which is used to identify
-                the interface within network management protocols such
-                as SNMP (where the name is stored in the ifDescr and
-                ifName objects) and not the PCI address. A persistent
-                mapping of interface names to integers is created from
-                the lists <option>services.snabb.interfaces</option>
-                and <option>services.snabb.subInterfaces</option> by
-                assigning numbers to subsequent interfaces in the
-                list, starting with 1.  In the context of SNMP, these
-                numbers are used as the ifIndex to identify each
-                interface in the relevant MIBs.
-              '';
-            };
-            pciAddress = mkOption {
-              type = types.str;
-              example = "0000:01:00.0";
-              description = ''
-                The PCI address of the interface in standard
-                "geographical notation"
-                (<literal>&lt;domain&gt;:&lt;bus&gt;:&lt;device&gt;.&lt;function&gt;</literal>)
-              '';
-            };
-          };
-        });
+        type = types.listOf (types.submodule (import ./modules/interface.nix
+                                                     { inherit lib; }));
       };
       subInterfaces = mkOption {
         default = [];
