@@ -23,60 +23,6 @@ in
           If not specified, the global default options are applied.
         '';
       };
-      interfaces = mkOption {
-        default = [];
-        example = literalExample
-          ''
-            [ {
-                name = "TenGigE0/0";
-                description = "VPNTP uplink";
-                driver = {
-                  path = "apps.intel.intel_app";
-                  name = "Intel82599";
-                };
-                addressFamilies = {
-                  ipv6 = {
-                    address = "2001:db8:0:1:0:0:0:2";
-                    nextHop = "2001:db8:0:1:0:0:0:1";
-                  };
-                };
-                trunk = { enable = false; };
-              }
-              {
-                name = "TenGigE0/1";
-                description = "VPNTP uplink";
-                driver = {
-                  path = "apps.intel.intel_app";
-                  name = "Intel82599";
-                };
-                trunk = {
-                  enable = true;
-                  encapsulation = "dot1q";
-                  vlans = [
-                    {
-                      description = "AC";
-                      vid = 100;
-                    }
-                    {
-                      description = "VPNTP uplink#2";
-                      vid = 200;
-                      addressFamilies = {
-                        ipv6 = {
-                          address = "2001:db8:0:2:0:0:0:2";
-                          nextHop = "2001:db8:0:2:0:0:0:1";
-                        };
-                      };
-                    }
-                  ];
-                };
-              }
-            ]
-          '';
-        description = ''
-          A list of interface definitions.
-        '';
-        type = types.listOf (mkSubmodule ./interface.nix);
-      };
 
       instances = mkOption {
         default = {};
@@ -432,7 +378,6 @@ in
                         (indentBlock 2 (ccConfig vpls.defaultControlChannel))) +
         (indentBlock 2
         ''
-          shmem_dir = "${cfg-snabb.shmemDir}",
           ac = {
         '') +
         (indentBlock 4
@@ -487,9 +432,9 @@ in
 
       interfaceConfig = intf:
         let
-          driver = intf.driver;
           intfSnabb = findSingle (s: s.name == intf.name) null null
                                  cfg-snabb.interfaces;
+          driver = intfSnabb.driver;
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
              ''
@@ -498,17 +443,29 @@ in
                  ${optionalString (intf.description != null)
                      ''description = "${intf.description}",''}
                  driver = {
-                   module = require("${driver.path}").${driver.name},
-                   config = {
-                     pciaddr = "${intfSnabb.pciAddress}",
-                     ${optionalString driver.config.snmpEnable
-                         ''snmp = { directory = "${cfg-snabb.shmemDir}" }''}
-                   },
-                 },
-                 mtu = ${toString intf.mtu},
+                   path = "${driver.path}",
+                   name = "${driver.name}",
              '' +
-             optionalString (intf.macAddress != null)
-               (indentBlock 2 ''mac = "${intf.macAddress}",'' + "\n") +
+             (if driver.literalConfig == null then
+                if intfSnabb.pciAddress != null then
+                  (indentBlock 4
+                   ''
+                     config = {
+                       pciaddr = "${intfSnabb.pciAddress}",
+                     },
+                   '')
+                else
+                  throw "missing PCI address for interface ${intf.name}"
+              else
+                (indentBlock 4
+                 ''
+                   config = ${driver.literalConfig},
+                 '')) +
+             (indentBlock 2 
+              ''
+                },
+                mtu = ${toString intf.mtu},
+              '') +
              optionalString (intf.addressFamilies != null)
                (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
              (indentBlock 2
@@ -540,10 +497,37 @@ in
         in pkgs.writeText "l2vpn-${name}"
          (''
             return {
-              interfaces = {
           '' +
+          optionalString (cfg-snabb.shmemDir != null)
+            (indentBlock 2 ''shmem_dir = "${cfg-snabb.shmemDir}",'' + "\n") +
+          optionalString (cfg-snabb.snmp.enable)
+            (indentBlock 2
+            ''
+              snmp = {
+                enable = true,
+                interval = ${toString cfg-snabb.snmp.interval},
+              },
+            '') +
+          (indentBlock 2
+          ''
+              interfaces = {
+          '') +
+          (let
+            ## Select the interfaces referred to by uplinks and acs
+            baseInterface = intf:
+              elemAt (splitString "." intf) 0;
+            refInterfaces =
+              (unique (flatten (map (vpls: (singleton (baseInterface vpls.uplink)) ++
+                                           (map baseInterface
+                                                (attrValues vpls.attachmentCircuits)))
+                                    (attrValues config.vpls))));
+            ourInterfaces = {
+              interfaces = (partition (e: (any (intf: e.name == intf)
+                                              refInterfaces)) cfg-snabb.interfaces).right;
+            };
+          in
           (indentBlock 4 ((mkConfigIterator "interfaces" interfaceConfig)
-                                            cfg)) +
+                                            ourInterfaces))) +
           (indentBlock 2
           ''
             }, -- interfaces
@@ -572,7 +556,7 @@ in
       subIntfNames = intf:
         map (vlan: intf.name + "." + toString vlan.vid) intf.trunk.vlans;
     in
-      concatLists (map subIntfNames cfg.interfaces);
+      concatLists (map subIntfNames cfg-snabb.interfaces);
 
     ## Register the SNMP sub-agent that handles the L2VPN-related
     ## MIBs with the SNMP daemon.
@@ -593,7 +577,7 @@ in
     services.exabgp.staticRoutes = mkIf cfg-exabgp.enable (let
       nextHopFromIfConfig = ifSpec:
         let
-          intfs = cfg.interfaces;
+          intfs = cfg-snabb.interfaces;
           parts = splitString "." ifSpec;
           nParts = (count (x: true) parts);
           getAddress = intf:
