@@ -434,7 +434,50 @@ in
         let
           intfSnabb = findSingle (s: s.name == intf.name) null null
                                  cfg-snabb.interfaces;
-          driver = intfSnabb.driver;
+          scanVendor = vendor: let
+            models = attrNames (filterAttrs (n: v: v.enable)
+                                            cfg-snabb.devices."${vendor}");
+          in
+            if models == [] then
+              null
+            else
+              if length models == 1 then
+                { vendor = "${vendor}"; model = "${elemAt models 0}"; }
+              else
+                throw (''Multiple active models for vendor "${vendor}" '' +
+                       ''(chose one): '' + concatStringsSep ", " models);
+          findActiveModel = let
+            vendors = remove null (map scanVendor (attrNames cfg-snabb.devices));
+          in
+            if length vendors == 1 then
+              let
+                model = elemAt vendors 0;
+              in
+                cfg-snabb.devices."${model.vendor}"."${model.model}"
+            else
+              if vendors == [] then
+                throw ''No active vendor/model found in services.snabb.devices''
+              else
+                throw (''Multiple active vendor/modules (chose one): '' +
+                       concatStringsSep ", "
+                         (map (s: "${s.vendor}/${s.model}") vendors));
+          nicConfig =
+            if intfSnabb.nicConfig != null then
+              intfSnabb.nicConfig
+            else
+              let
+                model = findActiveModel;
+              in
+                let
+                  i = (findSingle (i: i.name == intf.name) null null
+                                  model.interfaces);
+                 in
+                   if i != null then
+                     i.nicConfig
+                   else
+                     throw (''Interface ${intf.name} not defined or not unique for ''+
+                            ''device ${vendor}/${model}'');
+          driver = nicConfig.driver;
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
              ''
@@ -447,11 +490,11 @@ in
                    name = "${driver.name}",
              '' +
              (if driver.literalConfig == null then
-                if intfSnabb.pciAddress != null then
+                if nicConfig.pciAddress != null then
                   (indentBlock 4
                    ''
                      config = {
-                       pciaddr = "${intfSnabb.pciAddress}",
+                       pciaddr = "${nicConfig.pciAddress}",
                      },
                    '')
                 else
