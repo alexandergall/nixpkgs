@@ -107,6 +107,76 @@ in
         };
       };
 
+      devices = mkOption {
+        default = {};
+        example = literalExample ''
+          {
+            advantech = {
+              FWA3230A = {
+                interfaces = {
+                  name = "GigE1/0";
+                  nicConfig = {
+                    pciAddress = "0000:0c:00.0";
+                    driver = {
+                      path = "apps.inten.intel1g";
+                      name = "Intel1g";
+                    };
+                  };
+                };
+              };
+            };
+          }
+        '';
+        description = ''
+          List of supported devices by vendor and model.  The model
+          descriptions contain a list of physical interfaces which
+          defines their names and driver configurations.  Exactly one
+          vendor/model can be designated to be the active device by
+          setting its enable option to true. The high-level interface
+          configurations in <option>services.snabb.interfaces</option>
+          refer to these definitions by name.
+        '';
+        type = types.attrsOf (types.attrsOf (types.submodule {
+          options = {
+            enable = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Whether to enable the vendor/model-specific
+                configuration.  Only one vendor/model can be enabled.
+              '';
+            };
+            interfaces = mkOption {
+              default = [];
+              description = ''
+                List of per-model interface definitions.
+              '';
+              type = types.listOf (types.submodule {
+                options = {
+                  name = mkOption {
+                    type = types.str;
+                    default = null;
+                    example = "TenGigE0/0";
+                    description = ''
+                      The name of the interface.  All references to
+                      this interface must use this name.
+                    '';
+                  };
+                  nicConfig = mkOption {
+                    type = types.nullOr (types.submodule
+                             (import ./modules/nic-config.nix
+                                     { inherit lib; }));
+                    default = null;
+                    description = ''
+                      The low-level configuration of the interface.
+                    '';
+                };
+                };
+              });
+            };
+          };
+        }));
+      };
       interfaces = mkOption {
         default = [];
         example = literalExample
@@ -114,11 +184,6 @@ in
             [ {
                 name = "TenGigE0/0";
                 description = "VPNTP uplink";
-                pciAddress = "0000:04:00.0";
-                driver = {
-                  path = "apps.intel.intel_app";
-                  name = "Intel82599";
-                };
                 mtu = 1514;
                 addressFamilies = {
                   ipv6 = {
@@ -131,11 +196,6 @@ in
               {
                 name = "TenGigE0/1";
                 description = "VPNTP uplink";
-                pciAddress = "0000:04:00.1";
-                driver = {
-                  path = "apps.intel.intel_app";
-                  name = "Intel82599";
-                };
                 mtu = 9018;
                 trunk = {
                   enable = true;
@@ -160,17 +220,24 @@ in
               }
               { name = "Tap1";
                 description = "AC";
-                driver = {
-                  path = "apps.tap.tap";
-                  name = "Tap";
-                  literalConfig = "Tap1";
+                nicConfig = {
+                  driver = {
+                    path = "apps.tap.tap";
+                    name = "Tap";
+                    literalConfig = "Tap1";
+                  };
                 };
                 mtu = 1514;
               }
             ]
           '';
         description = ''
-          A list of interface definitions which map names to PCI devices.
+          A list of interface configurations.  If the nicConfig option
+          is not present, then name must refer to an interface defined
+          in the vendor/model description referred to by the
+          <option>services.snabb.device</option> option.  That
+          definition must have a nicConfig attribute which will be
+          used for the low-level configuration of the interface.
         '';
         type = types.listOf (types.submodule (import ./modules/interface.nix
                                                      { inherit lib; }));
@@ -261,20 +328,15 @@ in
           isUnique = l:
             length l == length (unique l);
           names = map (s: s.name) cfg.interfaces;
-          addrs = map (s: s.pciAddress) cfg.interfaces;
-          ifIndexNext = (length names) + 1;
           mkIfIndexTable = pkgs.writeText "snabb-ifindex"
             ''${concatStringsSep "\n"
                                  (imap (i: v: "${v} ${toString i}")
                                        (names ++ cfg.subInterfaces))}'';
         in
           if isUnique names then
-            if isUnique addrs then
-              "--ifindex=${mkIfIndexTable}"
-            else
-              throw "PCI addresses in services.snabb.interfaces are not unique"
+            "--ifindex=${mkIfIndexTable}"
           else
-              throw "names in services.snabb.interfaces are not unique";
+            throw "names in services.snabb.interfaces are not unique";
 
         subagents = [
           rec {
@@ -294,7 +356,7 @@ in
       };
       communities = {
         ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
-	ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+        ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
       };
     };
   };
