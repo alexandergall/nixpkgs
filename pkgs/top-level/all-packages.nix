@@ -2107,6 +2107,8 @@ let
 
   npm2nix = nodePackages_0_10.npm2nix;
 
+  lcd4linux = callPackage ../misc/drivers/lcd4linux { };
+
   ldapvi = callPackage ../tools/misc/ldapvi { };
 
   ldns = callPackage ../development/libraries/ldns { };
