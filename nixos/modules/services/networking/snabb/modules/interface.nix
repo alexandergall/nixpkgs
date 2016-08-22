@@ -96,6 +96,7 @@ in
     };
     description = mkOption {
       type = types.nullOr types.str;
+      default = null;
       example = literalExample ''10GE-SFP+ link to foo'';
       description = ''
         An optional verbose description of the interface.  This string
