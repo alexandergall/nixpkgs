@@ -6,13 +6,13 @@ with pkgs;
 ## "l2vpn" topic branch.
 snabb.overrideDerivation (origAttrs: rec {
   name = "snabb-${version}";
-  version = "l2vpn-v4";
+  version = "l2vpn-v5";
 
   src = fetchFromGitHub {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "1nkwpyykskdmyr8kx5zfwsmpk9pz2ijaqhrff7123lkj3pzlrsjk";
+    sha256 = "0ssisi7pjb3pcjhzz6qgbf2ivcjhg23w85p5ic5dbpb3yjskriby";
   };
   buildInputs = origAttrs.buildInputs ++ [ git ];
   PREFIX = "./";
