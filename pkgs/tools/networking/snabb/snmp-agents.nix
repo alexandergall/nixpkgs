@@ -2,13 +2,15 @@
 
 with pkgs;
 
+## nix-prefetch-url --unpack --name Snabb-SNMP-0.01 \
+##   https://github.com/alexandergall/snabb-snmp-subagent/archive/${rev}.tar.gz
 buildPerlPackage  rec {
   name = "Snabb-SNMP-0.01";
   src = fetchFromGitHub {
     owner = "alexandergall";
     repo = "snabb-snmp-subagent";
-    rev = "65b799d9d3aa8d8cf5a9acfa925d548beac16d9a";
-    sha256 = "0409jwxvzzxma2lvkig4nvsq5xi7c4ghdghjd04mchw5wf3jjvn3";
+    rev = "v1";
+    sha256 = "1hdwkpm9ms3fkr61n8i1yhvlc70npd2njk9yncd2hksrb6f3x6hx";
   };
   preConfigure = ''cd subagent'';
   propagatedBuildInputs = with perlPackages; [
