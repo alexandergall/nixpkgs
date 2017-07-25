@@ -12,6 +12,8 @@ let
 
 in
 {
+  imports = [ ./devices ];
+
   options = {
     services.snabb.programs.l2vpn = {
       programOptions = mkOption {
