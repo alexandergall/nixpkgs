@@ -409,10 +409,9 @@ in
              '') +
              optionalString (ipv6.nextHopMacAddress != null)
                (indentBlock 4
-                ''neighbor_mac = "${ipv6.nextHopMacAddress}",'' + "\n") +
+                ''next_hop_mac = "${ipv6.nextHopMacAddress}",'' + "\n") +
              (indentBlock 2
              ''
-                 neighbor_nd = ${boolToString ipv6.enableInboundND},
                },
              '')
           else
