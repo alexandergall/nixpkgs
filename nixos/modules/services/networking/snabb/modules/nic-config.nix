@@ -31,6 +31,24 @@ with lib;
           The name of the driver within the module referenced by path.
         '';
       };
+      extraConfig = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = literalExample ''
+          {
+            wait_for_link = false,
+            txq = 0,
+            rxq = 0
+          }
+        '';
+        description = ''
+          A literal Lua expression that must define a table which
+          will be merged with the default driver configuration,
+          which is a table containing the PCI address and MTU.
+          This allows the specification of driver-specific
+          configuration options.
+        '';
+      };
       literalConfig = mkOption {
         type = types.nullOr types.str;
         default = null;
