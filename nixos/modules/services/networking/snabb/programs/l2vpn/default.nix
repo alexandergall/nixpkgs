@@ -453,7 +453,11 @@ in
               let
                 model = elemAt vendors 0;
               in
-                cfg-snabb.devices."${model.vendor}"."${model.model}"
+                {
+                  modelSet = cfg-snabb.devices."${model.vendor}"."${model.model}";
+                  vendorName = model.vendor;
+                  modelName = model.model;
+                }
             else
               if vendors == [] then
                 throw ''No active vendor/model found in services.snabb.devices''
@@ -470,13 +474,13 @@ in
               in
                 let
                   i = (findSingle (i: i.name == intf.name) null null
-                                  model.interfaces);
+                                  model.modelSet.interfaces);
                  in
                    if i != null then
                      i.nicConfig
                    else
                      throw (''Interface ${intf.name} not defined or not unique for ''+
-                            ''device ${vendor}/${model}'');
+                            ''device ${model.vendorName}/${model.modelName}'');
           driver = nicConfig.driver;
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
@@ -496,7 +500,11 @@ in
                      config = {
                        pciaddr = "${nicConfig.pciAddress}",
                      },
-                   '')
+                   '') + optionalString (driver.extraConfig != null)
+                   (indentBlock 4
+                    ''
+                      extra_config = ${driver.extraConfig},
+                    '')
                 else
                   throw "missing PCI address for interface ${intf.name}"
               else
