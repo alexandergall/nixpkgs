@@ -48,22 +48,6 @@ let
                       interface.
                     '';
                   };
-                  enableInboundND = mkOption {
-                    type = types.bool;
-                    default = true;
-                    description = ''
-                      If the <option>nextHopMacAddress</option>
-                      option is set, this option determines whether
-                      neighbor solicitations for the local
-                      interface address are processed.  If
-                      disabled, the adjacent host must use a static
-                      neighbor cache entry for the local IPv6
-                      address in order to be able to deliver packets
-                      destined for the interface.  If
-                      <option>nextHopMacAddress</option> is not
-                      set, this option is ignored.
-                    '';
-                  };
                 };
               });
             }; # ipv6
