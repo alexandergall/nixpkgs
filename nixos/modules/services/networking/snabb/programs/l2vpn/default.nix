@@ -518,6 +518,15 @@ in
                 },
                 mtu = ${toString intf.mtu},
               '') +
+             optionalString (intf.mirror != null)
+               (indentBlock 2
+               ''
+                 mirror = {
+                   rx = ${boolToString intf.mirror.rx},
+                   tx = ${boolToString intf.mirror.tx},
+                   type = "${intf.mirror.type}",
+                 },
+               '') +
              optionalString (intf.addressFamilies != null)
                (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
              (indentBlock 2
