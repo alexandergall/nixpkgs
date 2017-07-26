@@ -97,6 +97,57 @@ in
         The low-level configuration of the interface.
       '';
     };
+    mirror = mkOption {
+      default = null;
+      description = ''
+        An optional configuration for mirroring traffic
+        from/to the interface.
+      '';
+      type = types.nullOr (types.submodule {
+        options = {
+          rx = mkOption {
+            type = types.either types.bool types.string;
+            default = false;
+            description = ''
+              Whether to enable mirroring of the packets received
+              by the interface.
+            '';
+          };
+          tx = mkOption {
+            type = types.either types.bool types.string;
+            default = false;
+            description = ''
+              Whether to enable mirroring of the packets transmitted
+              by the interface.
+            '';
+          };
+          type = mkOption {
+            type = types.enum [ "tap" "pcap" ];
+            default = "tap";
+            description = ''
+              The type of the mirror mechanism to use. If set to tap,
+              a Tap interface is created to receive the mirrored packets
+              for each direction that is enabled.  If the corresponding
+              option (<option>rx</option> or <option>tx</option>) is a
+              boolean, the name of the Tap device is constructed from the
+              name of the interface by replacing slashes by hyphens,
+              truncating the name to 13 characters and appending the string
+              "_rx" or "_tx" (i.e. the name will not exceed the system limit
+              of 16 character for interface names on Linux). If the rx or
+              tx option is a string, it will be used as the name of the
+              Tap device instead.
+
+              If the type is set to pcap, packets will be written to files
+              in the pcap format.  If the tx/rx option is a boolean, the
+              file name is constructed from the name of the interface by
+              replacing slashes by hyphens and appending the string "_tx.pcap"
+              or "_tx.pcap".  If the tx/rx option is a string, it is used
+              as the file name instead.
+            '';
+          };
+        };
+      });
+    };
     mtu = mkOption {
       type = types.int;
       default = 1514;
