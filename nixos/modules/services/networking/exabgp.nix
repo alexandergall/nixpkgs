@@ -24,7 +24,7 @@ let
         local-address ${conf.localAddress};
         local-as ${toString conf.localAS};
         peer-as ${toString conf.remoteAS};
-        group-updates true;
+        group-updates false;
         ${optionalString (conf.md5 != "") ''md5 "${conf.md5}";''}
         ${optionalString (conf.extraConfig != "") conf.extraConfig}
 
