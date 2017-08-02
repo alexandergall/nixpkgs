@@ -363,7 +363,7 @@ in
           (indentBlock 4
           ''
             config = {
-              ac_table = {
+              mac_table = {
                 verbose = ${boolToString mac.verbose},
                 timeout = ${toString mac.timeout}
               },
