@@ -9,13 +9,13 @@ with pkgs;
 ##      https://github.com/snabbco/snabb/archive/${version}.tar.gz
 snabb.overrideDerivation (origAttrs: rec {
   name = "snabb-${version}";
-  version = "l2vpn-v6";
+  version = "l2vpn-v7";
 
   src = fetchFromGitHub {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "1h8y130k88qx1p0ymjp3vi7fkfyxb6aai550hdk09nsxhqg31ngv";
+    sha256 = "1m6bjjslrk81jxj2f79vnfqf86gly6q30kyni9yrhymfwc5pq4q7";
   };
   buildInputs = origAttrs.buildInputs ++ [ git ];
   PREFIX = "./";
