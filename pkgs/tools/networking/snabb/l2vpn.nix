@@ -15,7 +15,7 @@ snabb.overrideDerivation (origAttrs: rec {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "1m6bjjslrk81jxj2f79vnfqf86gly6q30kyni9yrhymfwc5pq4q7";
+    sha256 = "0rh1p3gkdmxzis7wbaawm9cwmd3bv9jx3m6100v6zrgahlx4bfmp";
   };
   buildInputs = origAttrs.buildInputs ++ [ git ];
   PREFIX = "./";
