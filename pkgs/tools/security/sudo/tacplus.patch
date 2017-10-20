@@ -1,0 +1,98 @@
+diff -Naur sudo-1.8.15.orig/plugins/sudoers/parse.c sudo-1.8.15/plugins/sudoers/parse.c
+--- sudo-1.8.15.orig/plugins/sudoers/parse.c	2015-11-01 00:35:24.000000000 +0100
++++ sudo-1.8.15/plugins/sudoers/parse.c	2017-10-20 16:21:41.487923207 +0200
+@@ -31,6 +31,8 @@
+ #include <ctype.h>
+ #include <pwd.h>
+ #include <grp.h>
++#include <dlfcn.h>
++#include <libaudit.h>
+ 
+ #include "sudoers.h"
+ #include "parse.h"
+@@ -145,6 +147,8 @@
+ sudo_file_lookup(struct sudo_nss *nss, int validated, int pwflag)
+ {
+     int match, host_match, runas_match, cmnd_match;
++    int trytacplus = 1;
++    struct passwd tacpluspw, *pw;
+     struct cmndspec *cs;
+     struct cmndtag *tags = NULL;
+     struct privilege *priv;
+@@ -155,6 +159,8 @@
+     if (nss->handle == NULL)
+ 	debug_return_int(validated);
+ 
++    pw = sudo_user.pw;
++
+     /*
+      * Only check the actual command if pwflag is not set.
+      * It is set for the "validate", "list" and "kill" pseudo-commands.
+@@ -173,7 +179,7 @@
+ 	CLR(validated, FLAG_NO_HOST);
+ 	match = DENY;
+ 	TAILQ_FOREACH(us, &userspecs, entries) {
+-	    if (userlist_matches(sudo_user.pw, &us->users) != ALLOW)
++	    if (userlist_matches(pw, &us->users) != ALLOW)
+ 		continue;
+ 	    TAILQ_FOREACH(priv, &us->privileges, entries) {
+ 		if (hostlist_matches(&priv->hostlist) != ALLOW)
+@@ -207,8 +213,9 @@
+ 	debug_return_int(validated);
+ 
+     match = UNSPEC;
++ relook:
+     TAILQ_FOREACH_REVERSE(us, &userspecs, userspec_list, entries) {
+-	if (userlist_matches(sudo_user.pw, &us->users) != ALLOW)
++	if (userlist_matches(pw, &us->users) != ALLOW)
+ 	    continue;
+ 	CLR(validated, FLAG_NO_USER);
+ 	TAILQ_FOREACH_REVERSE(priv, &us->privileges, privilege_list, entries) {
+@@ -339,6 +346,47 @@
+ 		}
+ 	    }
+ 	}
++    } else if  (match == UNSPEC && trytacplus) {
++       uid_t auid = audit_getloginuid();
++
++       trytacplus = 0;
++
++       /*
++        * Check if a mapped TACACS user is trying to sudo. If so, we want
++        * to use their original password, not the local mapped user's passwd
++        * dlopen and dlsym so sudo works without the tacacs client software
++        * being installed
++        */
++       if (auid && auid != -1) {
++           static char mappednm[256];
++           static void *dlh;
++           static char *(*maplookup)(uid_t uid, uid_t auid,
++                                     unsigned session, char *mappedname,
++                                     size_t maplen, uint16_t *flags) = NULL;
++           unsigned (*map_session)(void) = NULL;
++           unsigned session;
++           char *nm = NULL;
++           if (!dlh) {
++               dlh = dlopen("libtacplus_map.so.1", RTLD_NOW);
++               if (dlh) {
++                   maplookup = dlsym(dlh, "lookup_mapuid");
++                   map_session = dlsym(dlh, "map_get_sessionid");
++               }
++           }
++           if (maplookup && map_session) {
++               session = map_session();
++               if (session && session != ~0) {
++                 nm = maplookup(pw->pw_uid, auid, session,
++                                mappednm, sizeof mappednm, NULL);
++               }
++               if (nm) {
++                   tacpluspw = *pw;
++                   pw = &tacpluspw;
++                   pw->pw_name = mappednm;
++                   goto relook;
++               }
++           }
++       }
+     }
+ #if defined(HAVE_SELINUX) || defined(HAVE_PRIV_SET)
+ done:

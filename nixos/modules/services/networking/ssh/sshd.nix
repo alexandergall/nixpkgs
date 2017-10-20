@@ -299,6 +299,7 @@ in
       { startSession = true;
         showMotd = true;
         unixAuth = cfg.passwordAuthentication;
+        tacplusAuth = true;
       };
 
     services.openssh.authorizedKeysFiles =
