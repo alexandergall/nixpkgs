@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, coreutils, pam, groff
+{ stdenv, fetchurl, coreutils, pam, groff, audit, pam_tacplus_map
 , sendmailPath ? "/var/setuid-wrappers/sendmail"
 , withInsults ? false
 }:
@@ -13,6 +13,8 @@ stdenv.mkDerivation rec {
       ];
     sha256 = "0263gi6i19fyzzc488n0qw3m518i39f6a7qmrfvahk9j10bkh5j3";
   };
+
+  patches = [ ./tacplus.patch ];
 
   configureFlags = [
     "--with-env-editor"
@@ -31,6 +33,10 @@ stdenv.mkDerivation rec {
     "--with-passprompt=[sudo] password for %p: "  # intentional trailing space
   ];
 
+  preConfigure = ''
+    makeFlagsArray=(CFLAGS="-I${audit}/include" LDFLAGS="-L${pam_tacplus_map}/lib -ltacplus_map -L${audit}/lib -laudit")
+  '';
+
   postConfigure =
     ''
     cat >> pathnames.h <<'EOF'
@@ -41,7 +47,7 @@ stdenv.mkDerivation rec {
     installFlags="sudoers_uid=$(id -u) sudoers_gid=$(id -g) sysconfdir=$out/etc rundir=$TMPDIR/dummy vardir=$TMPDIR/dummy"
     '';
 
-  buildInputs = [ coreutils pam groff ];
+  buildInputs = [ coreutils pam groff audit ];
 
   enableParallelBuilding = true;
 

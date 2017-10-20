@@ -10826,6 +10826,8 @@ let
 
   nss_ldap = callPackage ../os-specific/linux/nss_ldap { };
 
+  nss_tacplus = callPackage ../os-specific/linux/nss_tacplus { };
+
   pagemon = callPackage ../os-specific/linux/pagemon { };
 
   pam = callPackage ../os-specific/linux/pam { };
@@ -10845,6 +10847,10 @@ let
   pam_pgsql = callPackage ../os-specific/linux/pam_pgsql { };
 
   pam_ssh_agent_auth = callPackage ../os-specific/linux/pam_ssh_agent_auth { };
+
+  pam_tacplus = callPackage ../os-specific/linux/pam_tacplus { };
+
+  pam_tacplus_map = callPackage ../os-specific/linux/pam_tacplus/tacplus_map.nix { };
 
   pam_u2f = callPackage ../os-specific/linux/pam_u2f { };
 

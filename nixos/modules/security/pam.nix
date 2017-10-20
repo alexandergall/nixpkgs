@@ -93,6 +93,17 @@ let
         '';
       };
 
+      tacplusAuth = mkOption {
+        default = false;
+        type = types.bool;
+        description = ''
+          If set and TACACS+ support is enabled via
+          <option>users.tacplus.enable</option>, the user is authenticated
+          against the server configured by
+          <option>users.tacplus.enable</option>.
+        '';
+      };
+
       startSession = mkOption {
         default = false;
         type = types.bool;
@@ -220,6 +231,8 @@ let
       text = mkDefault
         (''
           # Account management.
+          ${optionalString (config.users.tacplus.enable && cfg.tacplusAuth)
+              "account include tacplus"}
           account sufficient pam_unix.so
           ${optionalString config.users.ldap.enable
               "account sufficient ${pam_ldap}/lib/security/pam_ldap.so"}
@@ -227,6 +240,8 @@ let
               "account sufficient ${pam_krb5}/lib/security/pam_krb5.so"}
 
           # Authentication management.
+          ${optionalString (config.users.tacplus.enable && cfg.tacplusAuth)
+              "auth include tacplus"}
           ${optionalString cfg.rootOK
               "auth sufficient pam_rootok.so"}
           ${optionalString cfg.requireWheel

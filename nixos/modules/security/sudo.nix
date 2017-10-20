@@ -85,7 +85,7 @@ in
 
     environment.systemPackages = [ sudo ];
 
-    security.pam.services.sudo = { sshAgentAuth = true; };
+    security.pam.services.sudo = { sshAgentAuth = true; tacplusAuth = true; };
 
     environment.etc = singleton
       { source =
