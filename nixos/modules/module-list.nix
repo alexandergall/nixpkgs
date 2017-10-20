@@ -22,6 +22,7 @@
   ./config/sysctl.nix
   ./config/system-environment.nix
   ./config/system-path.nix
+  ./config/tacplus.nix
   ./config/timezone.nix
   ./config/unix-odbc-drivers.nix
   ./config/users-groups.nix
