@@ -8,7 +8,7 @@ in
 {
   imports = [ ./lcd4linux.nix ];
 
-  config = mkIf cfg.FWA3230A.enable {
+  config = mkIf cfg.FWA3270A.enable {
     services.lcd4linux = {
       enable = true;
     };
