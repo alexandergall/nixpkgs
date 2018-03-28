@@ -1,7 +1,7 @@
 { config, ... }:
 
 {
-  imports = [ ./FWA3230A.nix ./FWA3270A.nix ];
+  imports = [ ./classes.nix ];
 
   config.services.snabb.devices =
       let
@@ -19,6 +19,7 @@
       {
 	advantech = {
 	  FWA3230A = {
+            classes = [ "FWA32xx" ];
 	    interfaces = [
 	      ## GigE interfaces in top row labelled MGMT0, MGMT1
 	      {
@@ -211,6 +212,7 @@
 	  }; ## FWA3230A_1
 
           FWA3270A = {
+            classes = [ "FWA32xx" ];
 	    interfaces = [
 	      ## Leftmost GigE interfaces MGMT1, MGMT2
 	      {
