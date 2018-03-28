@@ -146,6 +146,14 @@ in
                 configuration.  Only one vendor/model can be enabled.
               '';
             };
+            classes = mkOption {
+              type = types.listOf types.str;
+              default = [];
+              description = ''
+                A list of arbitrary strings that can be used to
+                identify models with common properties.
+              '';
+            };
             interfaces = mkOption {
               default = [];
               description = ''

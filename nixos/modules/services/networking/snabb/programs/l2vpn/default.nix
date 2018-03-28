@@ -432,46 +432,16 @@ in
         '';
 
       interfaceConfig = intf:
+        with (import ../../lib/devices.nix lib);
         let
           intfSnabb = findSingle (s: s.name == intf.name) null null
                                  cfg-snabb.interfaces;
-          scanVendor = vendor: let
-            models = attrNames (filterAttrs (n: v: v.enable)
-                                            cfg-snabb.devices."${vendor}");
-          in
-            if models == [] then
-              null
-            else
-              if length models == 1 then
-                { vendor = "${vendor}"; model = "${elemAt models 0}"; }
-              else
-                throw (''Multiple active models for vendor "${vendor}" '' +
-                       ''(chose one): '' + concatStringsSep ", " models);
-          findActiveModel = let
-            vendors = remove null (map scanVendor (attrNames cfg-snabb.devices));
-          in
-            if length vendors == 1 then
-              let
-                model = elemAt vendors 0;
-              in
-                {
-                  modelSet = cfg-snabb.devices."${model.vendor}"."${model.model}";
-                  vendorName = model.vendor;
-                  modelName = model.model;
-                }
-            else
-              if vendors == [] then
-                throw ''No active vendor/model found in services.snabb.devices''
-              else
-                throw (''Multiple active vendor/modules (chose one): '' +
-                       concatStringsSep ", "
-                         (map (s: "${s.vendor}/${s.model}") vendors));
           nicConfig =
             if intfSnabb.nicConfig != null then
               intfSnabb.nicConfig
             else
               let
-                model = findActiveModel;
+                model = findActiveModel cfg-snabb.devices true;
               in
                 let
                   i = (findSingle (i: i.name == intf.name) null null
