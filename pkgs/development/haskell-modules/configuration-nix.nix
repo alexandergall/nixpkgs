@@ -58,9 +58,8 @@ self: super: builtins.intersectAttrs super {
   # CUDA needs help finding the SDK headers and libraries.
   cuda = overrideCabal super.cuda (drv: {
     extraLibraries = (drv.extraLibraries or []) ++ [pkgs.linuxPackages.nvidia_x11];
-    configureFlags = (drv.configureFlags or []) ++
-      pkgs.lib.optional pkgs.stdenv.is64bit "--extra-lib-dirs=${pkgs.cudatoolkit}/lib64" ++ [
-      "--extra-lib-dirs=${pkgs.cudatoolkit}/lib"
+    configureFlags = (drv.configureFlags or []) ++ [
+      "--extra-lib-dirs=${pkgs.cudatoolkit.lib}/lib"
       "--extra-include-dirs=${pkgs.cudatoolkit}/include"
     ];
     preConfigure = ''
@@ -298,6 +297,9 @@ self: super: builtins.intersectAttrs super {
 
   # https://github.com/bos/pcap/issues/5
   pcap = addExtraLibrary super.pcap pkgs.libpcap;
+
+  # https://github.com/snoyberg/yaml/issues/106
+  yaml = disableCabalFlag super.yaml "system-libyaml";
 
   # The cabal files for these libraries do not list the required system dependencies.
   miniball = overrideCabal super.miniball (drv: {

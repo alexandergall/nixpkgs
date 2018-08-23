@@ -37,7 +37,7 @@ self: super: {
   hackage-security = dontCheck super.hackage-security;
 
   # Link statically to avoid runtime dependency on GHC.
-  jailbreak-cabal = (disableSharedExecutables super.jailbreak-cabal).override { Cabal = self.Cabal_1_20_0_4; };
+  jailbreak-cabal = disableSharedExecutables super.jailbreak-cabal;
 
   # enable using a local hoogle with extra packagages in the database
   # nix-shell -p "haskellPackages.hoogleLocal { packages = with haskellPackages; [ mtl lens ]; }"
@@ -80,7 +80,7 @@ self: super: {
       name = "git-annex-${drv.version}-src";
       url = "git://git-annex.branchable.com/";
       rev = "refs/tags/" + drv.version;
-      sha256 = "0fdcv9nig896ckl9x51ximxsvja1ii8qysf6c9ickvc0511hvr9w";
+      sha256 = "0q9z5q7vrcqa831wni972kchcdivqp55x1z2fgmdp8jfq4pidvyb";
     };
   })).override {
     dbus = if pkgs.stdenv.isLinux then self.dbus else null;
@@ -102,6 +102,7 @@ self: super: {
 
   # Test suite doesn't terminate
   hzk = dontCheck super.hzk;
+
   # Tests require a Kafka broker running locally
   haskakafka = dontCheck super.haskakafka;
 
@@ -300,6 +301,7 @@ self: super: {
   HTF = dontCheck super.HTF;
   htsn = dontCheck super.htsn;
   htsn-import = dontCheck super.htsn-import;
+  http-link-header = dontCheck super.http-link-header; # non deterministic failure https://hydra.nixos.org/build/75041105
   ihaskell = dontCheck super.ihaskell;
   influxdb = dontCheck super.influxdb;
   itanium-abi = dontCheck super.itanium-abi;
@@ -603,12 +605,12 @@ self: super: {
     '';
     doCheck = false; # https://github.com/chrisdone/hindent/issues/299
   })).override {
-    haskell-src-exts = self.haskell-src-exts_1_20_1;
+    haskell-src-exts = self.haskell-src-exts_1_20_2;
   };
 
   # Need newer versions of their dependencies than the ones we have in LTS-10.x.
-  cabal2nix = super.cabal2nix.override { hpack = self.hpack_0_27_0; };
-  hlint = super.hlint.overrideScope (self: super: { haskell-src-exts = self.haskell-src-exts_1_20_1; });
+  cabal2nix = super.cabal2nix.overrideScope (self: super: { hpack = self.hpack_0_27_0; hackage-db = self.hackage-db_2_0_1; });
+  hlint = super.hlint.overrideScope (self: super: { haskell-src-exts = self.haskell-src-exts_1_20_2; });
 
   # https://github.com/bos/configurator/issues/22
   configurator = dontCheck super.configurator;
@@ -765,9 +767,6 @@ self: super: {
   # https://github.com/fizruk/http-api-data/issues/49
   http-api-data = dontCheck super.http-api-data;
 
-  # https://github.com/snoyberg/yaml/issues/106
-  yaml = disableCabalFlag super.yaml "system-libyaml";
-
   # https://github.com/diagrams/diagrams-lib/issues/288
   diagrams-lib = overrideCabal super.diagrams-lib (drv: { doCheck = !pkgs.stdenv.isi686; });
 
@@ -847,14 +846,14 @@ self: super: {
   # Hoogle needs newer versions than lts-10 provides. lambdabot-haskell-plugins
   # depends on Hoogle and therefore needs to use the same version.
   hoogle = super.hoogle.override {
-    haskell-src-exts = self.haskell-src-exts_1_20_1;
+    haskell-src-exts = self.haskell-src-exts_1_20_2;
     http-conduit = self.http-conduit_2_3_0;
   };
   lambdabot-haskell-plugins = super.lambdabot-haskell-plugins.override {
     haskell-src-exts-simple = self.haskell-src-exts-simple_1_20_0_0;
   };
   haskell-src-exts-simple_1_20_0_0 = super.haskell-src-exts-simple_1_20_0_0.override {
-    haskell-src-exts = self.haskell-src-exts_1_20_1;
+    haskell-src-exts = self.haskell-src-exts_1_20_2;
   };
 
   # These packages depend on each other, forming an infinite loop.
@@ -915,17 +914,6 @@ self: super: {
   # https://github.com/bos/text-icu/issues/32
   text-icu = dontCheck super.text-icu;
 
-  # https://github.com/strake/lenz.hs/issues/2
-  lenz =
-    let patch = pkgs.fetchpatch
-          { url = https://github.com/strake/lenz.hs/commit/4b9b79104759b9c6b24484455e1eb0d962eb3cff.patch;
-            sha256 = "02i0w9i55a4r251wgjzl5vbk6m2qhilwl7bfp5jwmf22z66sglyn";
-          };
-    in overrideCabal super.lenz (drv:
-      { patches = (drv.patches or []) ++ [ patch ];
-        editedCabalFile = null;
-      });
-
   # https://github.com/haskell/cabal/issues/4969
   haddock-library_1_4_4 = dontHaddock super.haddock-library_1_4_4;
   haddock-api = super.haddock-api.override { haddock-library = self.haddock-library_1_4_4; };
@@ -936,18 +924,18 @@ self: super: {
   # https://github.com/Twinside/Juicy.Pixels/issues/149
   JuicyPixels = dontHaddock super.JuicyPixels;
 
-  # armv7l fixes.
-  happy = if pkgs.stdenv.isArm then dontCheck super.happy else super.happy; # Similar to https://ghc.haskell.org/trac/ghc/ticket/13062
-  hashable = if pkgs.stdenv.isArm then dontCheck super.hashable else super.hashable; # https://github.com/tibbe/hashable/issues/95
-  servant-docs = if pkgs.stdenv.isArm then dontCheck super.servant-docs else super.servant-docs;
-  servant-swagger = if pkgs.stdenv.isArm then dontCheck super.servant-swagger else super.servant-swagger;
-  swagger2 = if pkgs.stdenv.isArm then dontHaddock (dontCheck super.swagger2) else super.swagger2;
+  # aarch64 and armv7l fixes.
+  happy = if (pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64) then dontCheck super.happy else super.happy; # Similar to https://ghc.haskell.org/trac/ghc/ticket/13062
+  hashable = if (pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64) then dontCheck super.hashable else super.hashable; # https://github.com/tibbe/hashable/issues/95
+  servant-docs = if (pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64) then dontCheck super.servant-docs else super.servant-docs;
+  servant-swagger = if (pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64) then dontCheck super.servant-swagger else super.servant-swagger;
+  swagger2 = if (pkgs.stdenv.hostPlatform.isAarch32 || pkgs.stdenv.hostPlatform.isAarch64) then dontHaddock (dontCheck super.swagger2) else super.swagger2;
 
   # Tries to read a file it is not allowed to in the test suite
   load-env = dontCheck super.load-env;
 
-  # Sporadically OOMs even with 16G
-  ChasingBottoms = dontCheck super.ChasingBottoms;
+  # Use latest version to support newer QuickCheck and base libraries.
+  ChasingBottoms = self.ChasingBottoms_1_3_1_4;
 
   # Add support for https://github.com/haskell-hvr/multi-ghc-travis.
   multi-ghc-travis = self.callPackage ../tools/haskell/multi-ghc-travis {};
@@ -1005,5 +993,17 @@ self: super: {
 
   # Needs older hlint
   hpio = dontCheck super.hpio;
+
+  # Needs turtle >=1.5.0, which we use by default in lts-10.x.
+  changelogged = super.changelogged.override { turtle = self.turtle_1_5_4; };
+
+  # Avoid GHC compiler crash a la https://ghc.haskell.org/trac/ghc/ticket/5361.
+  SHA = appendPatch super.SHA (pkgs.fetchpatch {
+    url = https://github.com/GaloisInc/SHA/commit/c258350e953c3de2f98c5625ac3857f1a6863afc.patch;
+    sha256 = "1485bbjca1wqbh3c9yqj85kmq8j7zxq79y5isxypy3r6wjpr3g6b";
+  });
+
+  # https://github.com/strake/lenz-template.hs/issues/1
+  lenz-template = doJailbreak super.lenz-template;
 
 }

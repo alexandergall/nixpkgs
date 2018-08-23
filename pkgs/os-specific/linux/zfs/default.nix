@@ -1,8 +1,10 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, utillinux, nukeReferences, coreutils, fetchpatch
+{ stdenv, fetchFromGitHub, autoreconfHook, utillinux, nukeReferences, coreutils
+, perl, fetchpatch
 , configFile ? "all"
 
 # Userspace dependencies
 , zlib, libuuid, python, attr, openssl
+, nfs-utils
 
 # Kernel dependencies
 , kernel ? null, spl ? null, splUnstable ? null, splLegacyCrypto ? null
@@ -26,7 +28,7 @@ let
         versionAtLeast kernel.version incompatibleKernelVersion then
        throw ''
          Linux v${kernel.version} is not yet supported by zfsonlinux v${version}.
-         ${stdenv.lib.optional (!isUnstable) "Try zfsUnstable or set the NixOS option boot.zfs.enableUnstable."}
+         ${stdenv.lib.optionalString (!isUnstable) "Try zfsUnstable or set the NixOS option boot.zfs.enableUnstable."}
        ''
     else stdenv.mkDerivation rec {
       name = "zfs-${configFile}-${version}${optionalString buildKernel "-${kernel.version}"}";
@@ -39,8 +41,12 @@ let
 
       patches = extraPatches;
 
+      postPatch = optionalString buildKernel ''
+        patchShebangs scripts
+      '';
+
       nativeBuildInputs = [ autoreconfHook nukeReferences ]
-         ++ optional buildKernel kernel.moduleBuildDependencies;
+         ++ optional buildKernel (kernel.moduleBuildDependencies ++ [ perl ]);
       buildInputs =
            optionals buildKernel [ spl ]
         ++ optionals buildUser [ zlib libuuid python attr ]
@@ -49,13 +55,14 @@ let
       # for zdb to get the rpath to libgcc_s, needed for pthread_cancel to work
       NIX_CFLAGS_LINK = "-lgcc_s";
 
-      hardeningDisable = [ "pic" ];
+      hardeningDisable = [ "fortify" "stackprotector" "pic" ];
 
       preConfigure = ''
         substituteInPlace ./module/zfs/zfs_ctldir.c   --replace "umount -t zfs"           "${utillinux}/bin/umount -t zfs"
         substituteInPlace ./module/zfs/zfs_ctldir.c   --replace "mount -t zfs"            "${utillinux}/bin/mount -t zfs"
         substituteInPlace ./lib/libzfs/libzfs_mount.c --replace "/bin/umount"             "${utillinux}/bin/umount"
         substituteInPlace ./lib/libzfs/libzfs_mount.c --replace "/bin/mount"              "${utillinux}/bin/mount"
+        substituteInPlace ./lib/libshare/nfs.c        --replace "/usr/sbin/exportfs"      "${nfs-utils}/bin/exportfs"
         substituteInPlace ./cmd/ztest/ztest.c         --replace "/usr/sbin/ztest"         "$out/sbin/ztest"
         substituteInPlace ./cmd/ztest/ztest.c         --replace "/usr/sbin/zdb"           "$out/sbin/zdb"
         substituteInPlace ./config/user-systemd.m4    --replace "/usr/lib/modules-load.d" "$out/etc/modules-load.d"
@@ -64,7 +71,7 @@ let
         substituteInPlace ./cmd/zed/Makefile.am       --replace "\$(sysconfdir)"          "$out/etc"
         substituteInPlace ./module/Makefile.in        --replace "/bin/cp"                 "cp"
         substituteInPlace ./etc/systemd/system/zfs-share.service.in \
-          --replace "@bindir@/rm " "${coreutils}/bin/rm "
+          --replace "/bin/rm " "${coreutils}/bin/rm "
 
         for f in ./udev/rules.d/*
         do
@@ -72,6 +79,7 @@ let
         done
 
         ./autogen.sh
+        configureFlagsArray+=("--libexecdir=$out/libexec")
       '';
 
       configureFlags = [
@@ -81,6 +89,7 @@ let
         "--with-udevdir=$(out)/lib/udev"
         "--with-systemdunitdir=$(out)/etc/systemd/system"
         "--with-systemdpresetdir=$(out)/etc/systemd/system-preset"
+        "--with-systemdgeneratordir=$(out)/lib/systemd/system-generator"
         "--with-mounthelperdir=$(out)/bin"
         "--sysconfdir=/etc"
         "--localstatedir=/var"
@@ -142,9 +151,9 @@ in {
     incompatibleKernelVersion = null;
 
     # this package should point to the latest release.
-    version = "0.7.6";
+    version = "0.7.9";
 
-    sha256 = "1k3a69zfdk4ia4z2l69lbz0mj26bwdanxd2wynkdpm2kl3zjj18h";
+    sha256 = "0krpxrvnda2jx6l71xhw9fsksyp2a6h9l9asppac3szsd1n7fp9n";
 
     extraPatches = [
       (fetchpatch {
@@ -156,27 +165,29 @@ in {
     inherit spl;
   };
 
-  zfsUnstable = common {
+  zfsUnstable = common rec {
     # comment/uncomment if breaking kernel versions are known
     incompatibleKernelVersion = null;
 
     # this package should point to a version / git revision compatible with the latest kernel release
-    version = "2018-02-02";
+    version = "2018-05-22";
 
-    rev = "fbd42542686af053f0d162ec4630ffd4fff1cc30";
-    sha256 = "0qzkwnnk7kz1hwvcaqlpzi5yspfhhmd2alklc07k056ddzbx52qb";
+    rev = "ba863d0be4cbfbea938b10e49fb6ff459ac9ec20";
+    sha256 = "11dhigw1gybalwg2m6si148b6w195dj2lw38snqf6576wb5zndd0";
     isUnstable = true;
 
     extraPatches = [
       (fetchpatch {
-        url = "https://github.com/Mic92/zfs/compare/fbd42542686af053f0d162ec4630ffd4fff1cc30...nixos-zfs-2018-02-02.patch";
-        sha256 = "05wqwjm9648x60vkwxbp8l6z1q73r2a5l2ni28i2f4pla8s3ahln";
+        url = "https://github.com/Mic92/zfs/compare/${rev}...nixos-zfs-2018-02-02.patch";
+        sha256 = "1gqmgqi39qhk5kbbvidh8f2xqq25vj58i9x0wjqvcx6a71qj49ch";
       })
     ];
 
     spl = splUnstable;
   };
 
+  # TODO: Remove this module before 18.09
+  # also remove boot.zfs.enableLegacyCrypto
   zfsLegacyCrypto = common {
     # comment/uncomment if breaking kernel versions are known
     incompatibleKernelVersion = null;

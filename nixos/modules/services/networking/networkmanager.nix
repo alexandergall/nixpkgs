@@ -6,6 +6,9 @@ with lib;
 let
   cfg = config.networking.networkmanager;
 
+  dynamicHostsEnabled =
+    cfg.dynamicHosts.enable && cfg.dynamicHosts.hostsDirs != {};
+
   # /var/lib/misc is for dnsmasq.leases.
   stateDirs = "/var/lib/NetworkManager /var/lib/dhclient /var/lib/misc";
 
@@ -135,8 +138,7 @@ in {
         default = { inherit networkmanager modemmanager wpa_supplicant
                             networkmanager-openvpn networkmanager-vpnc
                             networkmanager-openconnect networkmanager-fortisslvpn
-                            networkmanager-pptp networkmanager-l2tp
-                            networkmanager-iodine; };
+                            networkmanager-l2tp networkmanager-iodine; };
         internal = true;
       };
 
@@ -254,6 +256,51 @@ in {
           so you don't need to to that yourself.
         '';
       };
+
+      dynamicHosts = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Enabling this option requires the
+            <option>networking.networkmanager.useDnsmasq</option> option to be
+            enabled too. If enabled, the directories defined by the
+            <option>networking.networkmanager.dynamicHosts.hostsDirs</option>
+            option will be set up when the service starts. The dnsmasq instance
+            managed by NetworkManager will then watch those directories for
+            hosts files (see the <literal>--hostsdir</literal> option of
+            dnsmasq). This way a non-privileged user can add or override DNS
+            entries on the local system (depending on what hosts directories
+            that are configured)..
+          '';
+        };
+        hostsDirs = mkOption {
+          type = with types; attrsOf (submodule {
+            options = {
+              user = mkOption {
+                type = types.str;
+                default = "root";
+                description = ''
+                  The user that will own the hosts directory.
+                '';
+              };
+              group = mkOption {
+                type = types.str;
+                default = "root";
+                description = ''
+                  The group that will own the hosts directory.
+                '';
+              };
+            };
+          });
+          default = {};
+          description = ''
+            Defines a set of directories (relative to
+            <literal>/run/NetworkManager/hostdirs</literal>) that dnsmasq will
+            watch for hosts files.
+          '';
+        };
+      };
     };
   };
 
@@ -262,12 +309,17 @@ in {
 
   config = mkIf cfg.enable {
 
-    assertions = [{
-      assertion = config.networking.wireless.enable == false;
-      message = "You can not use networking.networkmanager with networking.wireless";
-    }];
-
-    boot.kernelModules = [ "ppp_mppe" ]; # Needed for most (all?) PPTP VPN connections.
+    assertions = [
+      { assertion = config.networking.wireless.enable == false;
+        message = "You can not use networking.networkmanager with networking.wireless";
+      }
+      { assertion = !dynamicHostsEnabled || (dynamicHostsEnabled && cfg.useDnsmasq);
+        message = ''
+          To use networking.networkmanager.dynamicHosts you also need to enable
+          networking.networkmanager.useDnsmasq
+        '';
+      }
+    ];
 
     environment.etc = with cfg.basePackages; [
       { source = configFile;
@@ -285,9 +337,6 @@ in {
       { source = "${networkmanager-fortisslvpn}/etc/NetworkManager/VPN/nm-fortisslvpn-service.name";
         target = "NetworkManager/VPN/nm-fortisslvpn-service.name";
       }
-      { source = "${networkmanager-pptp}/etc/NetworkManager/VPN/nm-pptp-service.name";
-        target = "NetworkManager/VPN/nm-pptp-service.name";
-      }
       { source = "${networkmanager-l2tp}/etc/NetworkManager/VPN/nm-l2tp-service.name";
         target = "NetworkManager/VPN/nm-l2tp-service.name";
       }
@@ -304,7 +353,13 @@ in {
       ++ lib.imap1 (i: s: {
         inherit (s) source;
         target = "NetworkManager/dispatcher.d/${dispatcherTypesSubdirMap.${s.type}}03userscript${lib.fixedWidthNumber 4 i}";
-      }) cfg.dispatcherScripts;
+      }) cfg.dispatcherScripts
+      ++ optional (dynamicHostsEnabled)
+           { target = "NetworkManager/dnsmasq.d/dyndns.conf";
+             text = concatMapStrings (n: ''
+               hostsdir=/run/NetworkManager/hostsdirs/${n}
+             '') (attrNames cfg.dynamicHosts.hostsDirs);
+           };
 
     environment.systemPackages = cfg.packages;
 
@@ -338,6 +393,21 @@ in {
         mkdir -m 700 -p /etc/ipsec.d
         mkdir -m 755 -p ${stateDirs}
       '';
+    };
+
+    systemd.services.nm-setup-hostsdirs = mkIf dynamicHostsEnabled {
+      wantedBy = [ "network-manager.service" ];
+      before = [ "network-manager.service" ];
+      partOf = [ "network-manager.service" ];
+      script = concatStrings (mapAttrsToList (n: d: ''
+        mkdir -p "/run/NetworkManager/hostsdirs/${n}"
+        chown "${d.user}:${d.group}" "/run/NetworkManager/hostsdirs/${n}"
+        chmod 0775 "/run/NetworkManager/hostsdirs/${n}"
+      '') cfg.dynamicHosts.hostsDirs);
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExist = true;
+      };
     };
 
     # Turn off NixOS' network management

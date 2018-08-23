@@ -30,7 +30,6 @@ assert withGtk3 -> dconf != null;
 assert withGtk3 -> gtk3 != null;
 
 let
-  system-x86_64 = lib.elem stdenv.system lib.platforms.x86_64;
   compareVersion = v: builtins.compareVersions version v;
 in
 
@@ -258,7 +257,7 @@ stdenv.mkDerivation {
       "-no-warnings-are-errors"
     ]
     ++ (
-      if (!system-x86_64)
+      if (!stdenv.hostPlatform.isx86_64)
       then [ "-no-sse2" ]
       else lib.optional (compareVersion "5.9.0" >= 0) [ "-sse2" ]
     )
@@ -328,6 +327,12 @@ stdenv.mkDerivation {
         ]
         ++ lib.optional withGtk3 "-gtk"
         ++ lib.optional (compareVersion "5.9.0" >= 0) "-inotify"
+        ++ lib.optionals (compareVersion "5.10.0" >= 0) [
+          # Without these, Qt stops working on kernels < 3.17. See:
+          # https://github.com/NixOS/nixpkgs/issues/38832
+          "-no-feature-renameat2"
+          "-no-feature-getentropy"
+        ]
     );
 
   enableParallelBuilding = true;

@@ -27,7 +27,7 @@ with stdenv.lib;
 
 let
   majorVersion = "3.6";
-  minorVersion = "4";
+  minorVersion = "6";
   minorVersionSuffix = "";
   pythonVersion = majorVersion;
   version = "${majorVersion}.${minorVersion}${minorVersionSuffix}";
@@ -51,7 +51,7 @@ in stdenv.mkDerivation {
 
   src = fetchurl {
     url = "https://www.python.org/ftp/python/${majorVersion}.${minorVersion}/Python-${version}.tar.xz";
-    sha256 = "1fna7g8jxzl4kd2pqmmqhva5724c5m920x3fsrpsgskaylmr76qm";
+    sha256 = "0vz1wqg50zq6g15givdx1s2rq5752y5g2f1978bs6wvf8mfw36yp";
   };
 
   NIX_LDFLAGS = optionalString stdenv.isLinux "-lgcc_s";
@@ -69,6 +69,8 @@ in stdenv.mkDerivation {
 
   patches = [
     ./no-ldconfig.patch
+  ] ++ optionals (x11Support && stdenv.isDarwin) [
+    ./use-correct-tcl-tk-on-darwin.patch
   ];
 
   postPatch = ''
@@ -120,6 +122,9 @@ in stdenv.mkDerivation {
     ${optionalString stdenv.isDarwin ''
        export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -msse2"
        export MACOSX_DEPLOYMENT_TARGET=10.6
+     ''
+     + optionalString stdenv.hostPlatform.isMusl ''
+      export NIX_CFLAGS_COMPILE+=" -DTHREAD_STACK_SIZE=0x100000"
      ''}
   '';
 
@@ -181,7 +186,7 @@ in stdenv.mkDerivation {
     withPackages = import ../../with-packages.nix { inherit buildEnv pythonPackages;};
     pkgs = pythonPackages;
     isPy3 = true;
-    isPy35 = true;
+    isPy36 = true;
     is_py3k = true;  # deprecated
     interpreter = "${self}/bin/${executable}";
   };

@@ -42,7 +42,7 @@ let
   rmathVersion = "0.1";
   rmath-julia = fetchurl {
     url = "https://api.github.com/repos/JuliaLang/Rmath-julia/tarball/v${rmathVersion}";
-    sha256 = "0ai5dhjc43zcvangz123ryxmlbm51s21rg13bllwyn98w67arhb4";
+    sha256 = "1qyps217175qhid46l8f5i1v8i82slgp23ia63x2hzxwfmx8617p";
   };
   
   virtualenvVersion = "15.0.0";
@@ -50,11 +50,16 @@ let
     url = "mirror://pypi/v/virtualenv/virtualenv-${virtualenvVersion}.tar.gz";
     sha256 = "06fw4liazpx5vf3am45q2pdiwrv0id7ckv7n6zmpml29x6vkzmkh";
   };
+
+  majorVersion = "0";
+  minorVersion = "6";
+  maintenanceVersion = "2";
+  version = "${majorVersion}.${minorVersion}.${maintenanceVersion}";
 in
 
 stdenv.mkDerivation rec {
   pname = "julia";
-  version = "0.6.2";
+  inherit version;
   name = "${pname}-${version}";
 
   src = fetchzip {
@@ -172,12 +177,21 @@ stdenv.mkDerivation rec {
   '';
 
   postInstall = ''
-    for prog in "$out/bin/julia" "$out/bin/julia-debug"; do
-        wrapProgram "$prog" \
-            --prefix LD_LIBRARY_PATH : "$LD_LIBRARY_PATH:$out/lib/julia" \
-            --prefix PATH : "${stdenv.lib.makeBinPath [ curl ]}"
+    # Symlink shared libraries from LD_LIBRARY_PATH into lib/julia,
+    # as using a wrapper with LD_LIBRARY_PATH causes segmentation
+    # faults when program returns an error:
+    #   $ julia -e 'throw(Error())'
+    find $(echo $LD_LIBRARY_PATH | sed 's|:| |g') -maxdepth 1 -name '*.${if stdenv.isDarwin then "dylib" else "so"}*' | while read lib; do
+      if [[ ! -e $out/lib/julia/$(basename $lib) ]]; then
+        ln -sv $lib $out/lib/julia/$(basename $lib)
+      fi
     done
   '';
+
+  passthru = {
+    inherit majorVersion minorVersion maintenanceVersion;
+    site = "share/julia/site/v${majorVersion}.${minorVersion}";
+  };
 
   meta = {
     description = "High-level performance-oriented dynamical language for technical computing";

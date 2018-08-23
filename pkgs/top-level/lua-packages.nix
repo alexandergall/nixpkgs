@@ -138,15 +138,14 @@ let
   };
 
   luaevent = buildLuaPackage rec {
-    version = "0.4.3";
+    version = "0.4.4";
     name = "luaevent-${version}";
-    disabled = isLua52;
 
     src = fetchFromGitHub {
       owner = "harningt";
       repo = "luaevent";
       rev = "v${version}";
-      sha256 = "1c1n2zqx5rwfwkqaq1jj8gvx1vswvbihj2sy445w28icz1xfhpik";
+      sha256 = "1krzxr0jkv3gmhpckp02byhdd9s5dd0hpyqc8irc8i79dd8x0p53";
     };
 
     preBuild = ''
@@ -589,6 +588,26 @@ let
       license = licenses.mit;
       maintainers = with maintainers; [ vyp ];
       platforms = platforms.linux;
+    };
+  };
+
+  lfs = buildLuaPackage rec {
+    name = "lfs-${version}";
+    version = "1.7.0.2";
+
+    src = fetchFromGitHub {
+      owner = "keplerproject";
+      repo = "luafilesystem";
+      rev = "v" + stdenv.lib.replaceStrings ["."] ["_"] version;
+      sha256 = "0zmprgkm9zawdf9wnw0v3w6ibaj442wlc6alp39hmw610fl4vghi";
+    };
+
+    meta = with stdenv.lib; {
+      description = "Portable library for filesystem operations";
+      homepage = https://keplerproject.github.com/luafilesystem;
+      license = licenses.mit;
+      maintainers = with maintainers; [ vcunat ];
+      platforms = platforms.all;
     };
   };
 

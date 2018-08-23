@@ -27,7 +27,7 @@ with stdenv.lib;
 
 let
   majorVersion = "3.5";
-  minorVersion = "5";
+  minorVersion = "6";
   minorVersionSuffix = "";
   pythonVersion = majorVersion;
   version = "${majorVersion}.${minorVersion}${minorVersionSuffix}";
@@ -48,7 +48,7 @@ in stdenv.mkDerivation {
 
   src = fetchurl {
     url = "https://www.python.org/ftp/python/${majorVersion}.${minorVersion}/Python-${version}.tar.xz";
-    sha256 = "02ahsijk3a42sdzfp2il49shx0v4birhy7kkj0dikmh20hxjqg86";
+    sha256 = "0pqmf51zy2lzhbaj4yya2py2qr653j9152d0rg3p7wi1yl2dwp7m";
   };
 
   NIX_LDFLAGS = optionalString stdenv.isLinux "-lgcc_s";
@@ -67,6 +67,8 @@ in stdenv.mkDerivation {
   patches = [
     ./no-ldconfig.patch
     ./ld_library_path.patch
+  ] ++ optionals (x11Support && stdenv.isDarwin) [
+    ./use-correct-tcl-tk-on-darwin.patch
   ];
 
   postPatch = ''
@@ -97,6 +99,9 @@ in stdenv.mkDerivation {
     ${optionalString stdenv.isDarwin ''
        export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -msse2"
        export MACOSX_DEPLOYMENT_TARGET=10.6
+     ''
+     + optionalString stdenv.hostPlatform.isMusl ''
+      export NIX_CFLAGS_COMPILE+=" -DTHREAD_STACK_SIZE=0x100000"
      ''}
   '';
 

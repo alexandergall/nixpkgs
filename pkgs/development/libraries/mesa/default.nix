@@ -32,17 +32,17 @@ else
 
 let
   defaultGalliumDrivers =
-    if stdenv.isArm
+    if stdenv.isAarch32
     then ["nouveau" "freedreno" "vc4" "etnaviv" "imx"]
     else if stdenv.isAarch64
     then ["nouveau" "vc4" ]
     else ["svga" "i915" "r300" "r600" "radeonsi" "nouveau"];
   defaultDriDrivers =
-    if (stdenv.isArm || stdenv.isAarch64)
+    if (stdenv.isAarch32 || stdenv.isAarch64)
     then ["nouveau"]
     else ["i915" "i965" "nouveau" "radeon" "r200"];
   defaultVulkanDrivers =
-    if (stdenv.isArm || stdenv.isAarch64)
+    if (stdenv.isAarch32 || stdenv.isAarch64)
     then []
     else ["intel"] ++ lib.optional enableRadv "radeon";
 in
@@ -66,7 +66,7 @@ let
 in
 
 let
-  version = "17.3.3";
+  version = "17.3.6";
   branch  = head (splitString "." version);
   driverLink = "/run/opengl-driver" + optionalString stdenv.isi686 "-32";
 in
@@ -81,7 +81,7 @@ stdenv.mkDerivation {
       "ftp://ftp.freedesktop.org/pub/mesa/older-versions/${branch}.x/${version}/mesa-${version}.tar.xz"
       "https://mesa.freedesktop.org/archive/mesa-${version}.tar.xz"
     ];
-    sha256 = "16rpm4rwmzd4kdgipa1gw262jqg3346gih0y3bsc3bgn1vgcbfj1";
+    sha256 = "e5915680d44ac9d05defdec529db7459ac9edd441c9845266eff2e2d3e57fbf8";
   };
 
   prePatch = "patchShebangs .";

@@ -34,8 +34,8 @@ in
 , enableStaticLibraries ? true
 , extraLibraries ? [], librarySystemDepends ? [], executableSystemDepends ? []
 , homepage ? "http://hackage.haskell.org/package/${pname}"
-, platforms ? ghc.meta.platforms
-, hydraPlatforms ? platforms
+, platforms ? with stdenv.lib.platforms; unix ++ windows # GHC can cross-compile
+, hydraPlatforms ? null
 , hyperlinkSource ? true
 , isExecutable ? false, isLibrary ? !isExecutable
 , jailbreak ? false
@@ -133,7 +133,7 @@ let
     (optionalString (enableSharedExecutables && stdenv.isDarwin) "--ghc-option=-optl=-Wl,-headerpad_max_install_names")
     (optionalString enableParallelBuilding "--ghc-option=-j$NIX_BUILD_CORES")
     (optionalString useCpphs "--with-cpphs=${cpphs}/bin/cpphs --ghc-options=-cpp --ghc-options=-pgmP${cpphs}/bin/cpphs --ghc-options=-optP--cpp")
-    (enableFeature (enableDeadCodeElimination && !hostPlatform.isArm && !hostPlatform.isAarch64 && (versionAtLeast "8.0.1" ghc.version)) "split-objs")
+    (enableFeature (enableDeadCodeElimination && !hostPlatform.isAarch32 && !hostPlatform.isAarch64 && (versionAtLeast "8.0.1" ghc.version)) "split-objs")
     (enableFeature enableLibraryProfiling "library-profiling")
     (enableFeature enableExecutableProfiling (if versionOlder ghc.version "8" then "executable-profiling" else "profiling"))
     (enableFeature enableSharedLibraries "shared")
@@ -403,7 +403,7 @@ stdenv.mkDerivation ({
          // optionalAttrs broken               { inherit broken; }
          // optionalAttrs (description != "")  { inherit description; }
          // optionalAttrs (maintainers != [])  { inherit maintainers; }
-         // optionalAttrs (hydraPlatforms != platforms) { inherit hydraPlatforms; }
+         // optionalAttrs (hydraPlatforms != null) { inherit hydraPlatforms; }
          ;
 
 }

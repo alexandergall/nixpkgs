@@ -1,34 +1,36 @@
-{ lib, callPackage, stdenv, overrideCC, gcc5, fetchurl, fetchFromGitHub, fetchpatch }:
+{ lib, callPackage, stdenv, overrideCC, gcc5, fetchurl, fetchFromGitHub, fetchpatch, python3 }:
 
-let common = opts: callPackage (import ./common.nix opts); in
+let
+
+  common = opts: callPackage (import ./common.nix opts);
+
+  nixpkgsPatches = [
+    ./env_var_for_system_dir.patch
+  ];
+
+  firefox60_aarch64_skia_patch = fetchpatch {
+      name = "aarch64-skia.patch";
+      url = https://src.fedoraproject.org/rpms/firefox/raw/8cff86d95da3190272d1beddd45b41de3148f8ef/f/build-aarch64-skia.patch;
+      sha256 = "11acb0ms4jrswp7268nm2p8g8l4lv8zc666a5bqjbb09x9k6b78k";
+  };
+
+in
 
 rec {
 
   firefox = common rec {
     pname = "firefox";
-    version = "58.0.2";
+    version = "61.0.2";
     src = fetchurl {
       url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
-      sha512 = "ff748780492fc66b3e44c7e7641f16206e4c09514224c62d37efac2c59877bdf428a3670bfb50407166d7b505d4e2ea020626fd776b87f6abb6bc5d2e54c773f";
+      sha512 = "3zzcxqjpsn2m5z4l66rxrq7yf58aii370jj8pcl50smcd55sfsyknnc20agbppsw4k4pnwycfn57im33swwkjzg0hk0h2ng4rvi42x2";
     };
 
-    patches = [
+    patches = nixpkgsPatches ++ [
       ./no-buildconfig.patch
-      ./env_var_for_system_dir.patch
+    ];
 
-      # https://bugzilla.mozilla.org/show_bug.cgi?id=1430274
-      # Scheduled for firefox 59
-      (fetchpatch {
-        url = "https://bug1430274.bmoattachments.org/attachment.cgi?id=8943426";
-        sha256 = "12yfss3k61yilrb337dh2rffy5hh83d2f16gqrf5i56r9c33f7hf";
-      })
-
-      # https://bugzilla.mozilla.org/show_bug.cgi?id=1388981
-      # Should have been fixed in firefox 57
-    ] ++ lib.optional stdenv.isi686 (fetchpatch {
-      url = "https://hg.mozilla.org/mozilla-central/raw-rev/15517c5a5d37";
-      sha256 = "1ba487p3hk4w2w7qqfxgv1y57vp86b8g3xhav2j20qd3j3phbbn7";
-    });
+    extraNativeBuildInputs = [ python3 ];
 
     meta = {
       description = "A web browser built from Firefox source tree";
@@ -41,22 +43,59 @@ rec {
     };
   } {};
 
-  firefox-esr = common rec {
+  firefox-esr-52 = common rec {
     pname = "firefox-esr";
-    version = "52.6.0esr";
+    version = "52.9.0esr";
     src = fetchurl {
       url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
-      sha512 = "cf583df34272b7ff8841c3b093ca0819118f9c36d23c6f9b3135db298e84ca022934bcd189add6473922b199b47330c0ecf14c303ab4177c03dbf26e64476fa4";
+      sha512 = "bfca42668ca78a12a9fb56368f4aae5334b1f7a71966fbba4c32b9c5e6597aac79a6e340ac3966779d2d5563eb47c054ab33cc40bfb7306172138ccbd3adb2b9";
     };
 
-    patches =
-      [ ./env_var_for_system_dir.patch ];
+    patches = nixpkgsPatches ++ [
+      # this one is actually an omnipresent bug
+      # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
+      ./fix-pa-context-connect-retval.patch
+    ]
+    # The following patch is only required on ARM platforms and should be
+    # included for the next ESR release >= 52.7.3esr
+    ++ lib.optional stdenv.isAarch32
+      (fetchpatch {
+        name = "CVE-2018-5147-tremor.patch";
+        url = https://hg.mozilla.org/releases/mozilla-esr52/rev/5cd5586a2f48;
+        sha256 = "0mdqa9w1p6cmli6976v4wi0sw9r4p5prkj7lzfd1877wk11c9c73";
+      })
+    ;
 
     meta = firefox.meta // {
       description = "A web browser built from Firefox Extended Support Release source tree";
     };
     updateScript = callPackage ./update.nix {
-      attrPath = "firefox-esr-unwrapped";
+      attrPath = "firefox-esr-52-unwrapped";
+      versionSuffix = "esr";
+    };
+  } {};
+
+  firefox-esr-60 = common rec {
+    pname = "firefox-esr";
+    version = "60.1.0esr";
+    src = fetchurl {
+      url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
+      sha512 = "2bg7zvkpy1x2ryiazvk4nn5m94v0addbhrcrlcf9djnqjf14rp5q50lbiymhxxz0988vgpicsvizifb8gb3hi7b8g17rdw6438ddhh6";
+    };
+
+    patches = nixpkgsPatches ++ [
+      ./no-buildconfig.patch
+
+      # this one is actually an omnipresent bug
+      # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
+      ./fix-pa-context-connect-retval.patch
+    ] ++ lib.optional stdenv.isAarch64 firefox60_aarch64_skia_patch;
+
+    meta = firefox.meta // {
+      description = "A web browser built from Firefox Extended Support Release source tree";
+    };
+    updateScript = callPackage ./update.nix {
+      attrPath = "firefox-esr-60-unwrapped";
       versionSuffix = "esr";
     };
   } {};
@@ -124,8 +163,7 @@ in rec {
       sha256 = "169mjkr0bp80yv9nzza7kay7y2k03lpnx71h4ybcv9ygxgzdgax5";
     };
 
-    patches =
-      [ ./env_var_for_system_dir.patch ];
+    patches = nixpkgsPatches;
   } // commonAttrs) {};
 
   tor-browser-7-5 = common (rec {
@@ -142,8 +180,7 @@ in rec {
       sha256 = "0llbk7skh1n7yj137gv7rnxfasxsnvfjp4ss7h1fbdnw19yba115";
     };
 
-    patches =
-      [ ./env_var_for_system_dir.patch ];
+    patches = nixpkgsPatches;
   } // commonAttrs) {};
 
   tor-browser = tor-browser-7-5;

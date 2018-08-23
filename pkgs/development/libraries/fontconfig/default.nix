@@ -39,7 +39,8 @@ stdenv.mkDerivation rec {
   # additionally required for the glibc-2.25 patch; avoid requiring gperf
   postPatch = ''
     sed s/CHAR_WIDTH/CHARWIDTH/g -i src/fcobjshash.{h,gperf}
-    touch src/*
+    sleep 2
+    touch src/fcobjshash.h
   '';
 
   outputs = [ "bin" "dev" "lib" "out" ]; # $out contains all the config
@@ -56,7 +57,9 @@ stdenv.mkDerivation rec {
   ];
 
   # We should find a better way to access the arch reliably.
-  crossArch = hostPlatform.arch or null;
+  crossArch = if stdenv.hostPlatform != stdenv.buildPlatform
+    then hostPlatform.parsed.cpu.name
+    else null;
 
   preConfigure = ''
     if test -n "$crossConfig"; then

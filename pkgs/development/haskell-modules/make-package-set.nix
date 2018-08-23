@@ -38,7 +38,7 @@ let
   inherit (stdenv) buildPlatform hostPlatform;
 
   inherit (stdenv.lib) fix' extends makeOverridable;
-  inherit (haskellLib) overrideCabal;
+  inherit (haskellLib) overrideCabal getHaskellBuildInputs;
 
   mkDerivationImpl = pkgs.callPackage ./generic-builder.nix {
     inherit stdenv;
@@ -102,12 +102,11 @@ let
   callPackage = drv: args: callPackageWithScope defaultScope drv args;
 
   withPackages = packages: buildPackages.callPackage ./with-packages-wrapper.nix {
-    inherit (self) llvmPackages;
-    inherit ghc;
+    inherit (self) ghc llvmPackages;
     inherit packages;
   };
 
-  haskellSrc2nix = { name, src, sha256 ? null }:
+  haskellSrc2nix = { name, src, sha256 ? null, extraCabal2nixOptions ? "" }:
     let
       sha256Arg = if isNull sha256 then "--sha256=" else ''--sha256="${sha256}"'';
     in pkgs.buildPackages.stdenv.mkDerivation {
@@ -120,7 +119,7 @@ let
       installPhase = ''
         export HOME="$TMP"
         mkdir -p "$out"
-        cabal2nix --compiler=${ghc.haskellCompilerName} --system=${stdenv.system} ${sha256Arg} "${src}" > "$out/default.nix"
+        cabal2nix --compiler=${self.ghc.haskellCompilerName} --system=${hostPlatform.system} ${sha256Arg} "${src}" ${extraCabal2nixOptions} > "$out/default.nix"
       '';
   };
 
@@ -136,29 +135,40 @@ let
     src    = "${component}/${name}.cabal";
   };
 
+  # Adds a nix file as an input to the haskell derivation it
+  # produces. This is useful for callHackage / callCabal2nix to
+  # prevent the generated default.nix from being garbage collected
+  # (requiring it to be frequently rebuilt), which can be an
+  # annoyance.
+  callPackageKeepDeriver = src: args:
+    overrideCabal (self.callPackage src args) (orig: {
+      preConfigure = ''
+        # Generated from ${src}
+        ${orig.preConfigure or ""}
+      '';
+    });
+
 in package-set { inherit pkgs stdenv callPackage; } self // {
 
     inherit mkDerivation callPackage haskellSrc2nix hackage2nix;
 
     inherit (haskellLib) packageSourceOverrides;
 
-    callHackage = name: version: self.callPackage (self.hackage2nix name version);
+    callHackage = name: version: callPackageKeepDeriver (self.hackage2nix name version);
 
     # Creates a Haskell package from a source package by calling cabal2nix on the source.
     callCabal2nix = name: src: args: let
       filter = path: type:
                  pkgs.lib.hasSuffix "${name}.cabal" path ||
                  baseNameOf path == "package.yaml";
-      expr = haskellSrc2nix {
+      expr = self.haskellSrc2nix {
         inherit name;
         src = if pkgs.lib.canCleanSource src
                 then pkgs.lib.cleanSourceWith { inherit src filter; }
               else src;
       };
-    in overrideCabal (self.callPackage expr args) (orig: {
+    in overrideCabal (callPackageKeepDeriver expr args) (orig: {
          inherit src;
-         preConfigure =
-           "# Generated from ${expr}\n${orig.preConfigure or ""}";
        });
 
     # : { root : Path
@@ -187,6 +197,52 @@ in package-set { inherit pkgs stdenv callPackage; } self // {
           inherit packages;
         };
       in withPackages (packages ++ [ hoogle ]);
+
+    # Returns a derivation whose environment contains a GHC with only
+    # the dependencies of packages listed in `packages`, not the
+    # packages themselves. Using nix-shell on this derivation will
+    # give you an environment suitable for developing the listed
+    # packages with an incremental tool like cabal-install.
+    #
+    #     # default.nix
+    #     with import <nixpkgs> {};
+    #     haskellPackages.extend (haskell.lib.packageSourceOverrides {
+    #       frontend = ./frontend;
+    #       backend = ./backend;
+    #       common = ./common;
+    #     })
+    #
+    #     # shell.nix
+    #     (import ./.).shellFor {
+    #       packages = p: [p.frontend p.backend p.common];
+    #       withHoogle = true;
+    #     }
+    #
+    #     -- cabal.project
+    #     packages:
+    #       frontend/
+    #       backend/
+    #       common/
+    #
+    #     bash$ nix-shell --run "cabal new-build all"
+    shellFor = { packages, withHoogle ? false, ... } @ args:
+      let
+        selected = packages self;
+        packageInputs = builtins.map getHaskellBuildInputs selected;
+        haskellInputs =
+          builtins.filter
+            (input: pkgs.lib.all (p: input.outPath != p.outPath) selected)
+            (pkgs.lib.concatMap (p: p.haskellBuildInputs) packageInputs);
+        systemInputs = pkgs.lib.concatMap (p: p.systemBuildInputs) packageInputs;
+        withPackages = if withHoogle then self.ghcWithHoogle else self.ghcWithPackages;
+        mkDrvArgs = builtins.removeAttrs args ["packages" "withHoogle"];
+      in pkgs.stdenv.mkDerivation (mkDrvArgs // {
+        name = "ghc-shell-for-packages";
+        nativeBuildInputs = [(withPackages (_: haskellInputs))] ++ mkDrvArgs.nativeBuildInputs or [];
+        buildInputs = systemInputs ++ mkDrvArgs.buildInputs or [];
+        phases = ["installPhase"];
+        installPhase = "echo $nativeBuildInputs $buildInputs > $out";
+      });
 
     ghc = ghc // {
       withPackages = self.ghcWithPackages;

@@ -27,7 +27,7 @@ rec {
       patches = [];
     });
 
-    docker-containerd = containerd.overrideAttrs (oldAttrs: rec {
+    docker-containerd = (containerd.override { inherit go; }).overrideAttrs (oldAttrs: rec {
       name = "docker-containerd";
       src = fetchFromGitHub {
         owner = "docker";
@@ -195,29 +195,17 @@ rec {
   });
 
   # Get revisions from
-  # https://github.com/docker/docker-ce/blob/v${version}/components/engine/hack/dockerfile/binaries-commits
+  # https://github.com/docker/docker-ce/tree/v${version}/components/engine/hack/dockerfile/install/*
 
-  docker_17_12 = dockerGen rec {
-    version = "17.12.1-ce";
-    rev = "7390fc6103da41cf98ae66cfac80fa143268bf60"; # git commit
-    sha256 = "14pz5yqsjypjb6xiq828jrg9aq7wajrrf3mnd9109lw224p03d8i";
-    runcRev = "9f9c96235cc97674e935002fc3d78361b696a69e";
-    runcSha256 = "18f8vqdbf685dd777pjh8jzpxafw2vapqh4m43xgyi7lfwa0gsln";
-    containerdRev = "9b55aab90508bd389d7654c4baf173a981477d55";
-    containerdSha256 = "0kfafqi66yp4qy738pl11f050hfrx9m4kc670qpx7fmf9ii7q6p2";
-    tiniRev = "949e6facb77383876aeff8a6944dde66b3089574";
-    tiniSha256 = "0zj4kdis1vvc6dwn4gplqna0bs7v6d1y2zc8v80s3zi018inhznw";
-  };
-
-  docker_18_02 = dockerGen rec {
-    version = "18.02.0-ce";
-    rev = "fc4de447b563498eb4da89f56fb858bbe761d91b"; # git commit
-    sha256 = "1025cwv2niiwg5pc30nb1qky1raisvd9ix2qw6rdib232hwq9k8m";
-    runcRev = "9f9c96235cc97674e935002fc3d78361b696a69e";
-    runcSha256 = "18f8vqdbf685dd777pjh8jzpxafw2vapqh4m43xgyi7lfwa0gsln";
-    containerdRev = "9b55aab90508bd389d7654c4baf173a981477d55";
-    containerdSha256 = "0kfafqi66yp4qy738pl11f050hfrx9m4kc670qpx7fmf9ii7q6p2";
-    tiniRev = "949e6facb77383876aeff8a6944dde66b3089574";
-    tiniSha256 = "0zj4kdis1vvc6dwn4gplqna0bs7v6d1y2zc8v80s3zi018inhznw";
+  docker_18_06 = dockerGen rec {
+    version = "18.06.0-ce";
+    rev = "0ffa8257ec673ed6849b73b03fb01b0cac90fdb3"; # git commit
+    sha256 = "1w6jgqbc53pkgfkf2p6z5g316q1r5jvnw4lq11j4qdkw7vy8q5d9";
+    runcRev = "69663f0bd4b60df09991c08812a60108003fa340";
+    runcSha256 = "1l37r97l3ra4ph069w190d05r0a43s76nn9jvvlkbwrip1cp6gyq";
+    containerdRev = "d64c661f1d51c48782c9cec8fda7604785f93587";
+    containerdSha256 = "0pk1kii8bmlvziblrqwb88w5cd486pmb7vw8p7kcyn9lqsw32ria";
+    tiniRev = "fec3683b971d9c3ef73f284f176672c44b448662";
+    tiniSha256 = "1h20i3wwlbd8x4jr2gz68hgklh0lb0jj7y5xk1wvr8y58fip1rdn";
   };
 }
