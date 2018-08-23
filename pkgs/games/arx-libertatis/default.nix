@@ -1,25 +1,29 @@
-{ stdenv, fetchgit, cmake, zlib, boost,
-  openal, glm, freetype, mesa, glew, SDL2,
-  dejavu_fonts }:
+{ stdenv, fetchFromGitHub, cmake, zlib, boost,
+  openal, glm, freetype, libGLU_combined, glew, SDL2,
+  dejavu_fonts, inkscape, optipng, imagemagick }:
 
 stdenv.mkDerivation rec {
   name = "arx-libertatis-${version}";
-  version = "2016-02-02";
+  version = "2017-10-30";
 
-  src = fetchgit {
-    url = "https://github.com/arx/ArxLibertatis";
-    rev = "205c6cda4d5ac10f3af4ea7bb89c2fc88dac7c9a";
-    sha256 = "0dy81pk4r94qq720kk6ynkjp2wr3z9hzm9h1x46nkkpn7fj8srrn";
+  src = fetchFromGitHub {
+    owner  = "arx";
+    repo   = "ArxLibertatis";
+    rev    = "e5ea4e8f0f7e86102cfc9113c53daeb0bdee6dd3";
+    sha256 = "11z0ndhk802jr3w3z5gfqw064g98v99xin883q1qd36jw96s27p5";
   };
 
   buildInputs = [
     cmake zlib boost openal glm
-    freetype mesa glew SDL2
+    freetype libGLU_combined glew SDL2 inkscape
+    optipng imagemagick
   ];
 
-  preConfigure = ''
-    cmakeFlags="-DDATA_DIR_PREFIXES=$out/share"
-  '';
+  cmakeFlags = [
+    "-DDATA_DIR_PREFIXES=$out/share"
+    "-DImageMagick_convert_EXECUTABLE=${imagemagick.out}/bin/convert"
+    "-DImageMagick_mogrify_EXECUTABLE=${imagemagick.out}/bin/mogrify"
+  ];
 
   enableParallelBuilding = true;
 
@@ -35,11 +39,10 @@ stdenv.mkDerivation rec {
       first-person role-playing game / dungeon crawler
       developed by Arkane Studios.
     '';
-    homepage = "http://arx-libertatis.org/";
+    homepage = http://arx-libertatis.org/;
     license = licenses.gpl3;
     maintainers = with maintainers; [ rnhmjoj ];
-    platform = platforms.all;
+    platforms = platforms.linux;
   };
 
 }
-

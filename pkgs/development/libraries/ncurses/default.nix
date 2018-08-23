@@ -1,26 +1,35 @@
-{ lib, stdenv, fetchurl
+{ lib, stdenv, fetchurl, pkgconfig
 
+, abiVersion
 , mouseSupport ? false
 , unicode ? true
+, enableStatic ? stdenv.hostPlatform.useAndroidPrebuilt
+, withCxx ? !stdenv.hostPlatform.useAndroidPrebuilt
 
 , gpm
 
-# Extra Options
-, abiVersion ? "5"
+, buildPlatform, hostPlatform
+, buildPackages
 }:
 
 stdenv.mkDerivation rec {
-  name = "ncurses-5.9";
+  version = "6.0-20171125";
+  name = "ncurses-${version}" + lib.optionalString (abiVersion == "5") "-abi5-compat";
 
   src = fetchurl {
-    url = "mirror://gnu/ncurses/${name}.tar.gz";
-    sha256 = "0fsn7xis81za62afan0vvm38bvgzg5wfmv1m86flqcj0nj7jjilh";
+    urls = [
+      # Remove this mirror on next upgrade, it's only needed because upstream took ncurses-6.0-20171125.tgz down!
+      "http://bld1.alpinelinux.org/distfiles/v3.5/ncurses-${version}.tgz"
+
+      "ftp://ftp.invisible-island.net/ncurses/current/ncurses-${version}.tgz"
+      "https://invisible-mirror.net/archives/ncurses/current/ncurses-${version}.tgz"
+    ];
+    sha256 = "11adzj0k82nlgpfrflabvqn2m7fmhp2y6pd7ivmapynxqb9vvb92";
   };
 
-  # gcc-5.patch should be removed after 5.9
-  patches = [ ./clang.patch ./gcc-5.patch ];
+  patches = lib.optional (!stdenv.cc.isClang) ./clang.patch;
 
-  outputs = [ "dev" "out" "man" ];
+  outputs = [ "out" "dev" "man" ];
   setOutputFlags = false; # some aren't supported
 
   configureFlags = [
@@ -28,11 +37,20 @@ stdenv.mkDerivation rec {
     "--without-debug"
     "--enable-pc-files"
     "--enable-symlinks"
-  ] ++ lib.optional unicode "--enable-widec";
+  ] ++ lib.optional unicode "--enable-widec"
+    ++ lib.optional enableStatic "--enable-static"
+    ++ lib.optional (!withCxx) "--without-cxx"
+    ++ lib.optional (abiVersion == "5") "--with-abi-version=5";
 
   # Only the C compiler, and explicitly not C++ compiler needs this flag on solaris:
   CFLAGS = lib.optionalString stdenv.isSunOS "-D_XOPEN_SOURCE_EXTENDED";
 
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [
+    pkgconfig
+  ] ++ lib.optionals (buildPlatform != hostPlatform) [
+    buildPackages.ncurses
+  ];
   buildInputs = lib.optional (mouseSupport && stdenv.isLinux) gpm;
 
   preConfigure = ''
@@ -51,11 +69,7 @@ stdenv.mkDerivation rec {
            -e '/CPPFLAGS="$CPPFLAGS/s/ -D_XOPEN_SOURCE_EXTENDED//' \
         configure
     CFLAGS=-D_XOPEN_SOURCE_EXTENDED
-  '' + lib.optionalString stdenv.isCygwin ''
-    sed -i -e 's,LIB_SUFFIX="t,LIB_SUFFIX=",' configure
   '';
-
-  selfNativeBuildInput = true;
 
   enableParallelBuilding = true;
 
@@ -88,6 +102,12 @@ stdenv.mkDerivation rec {
           if [ -e "$out/lib/lib''${library}$suffix.$dylibtype" ]; then
             ln -svf lib''${library}$suffix.$dylibtype $out/lib/lib$library$newsuffix.$dylibtype
             ln -svf lib''${library}$suffix.$dylibtype.${abiVersion} $out/lib/lib$library$newsuffix.$dylibtype.${abiVersion}
+            if [ "ncurses" = "$library" ]
+            then
+              # make libtinfo symlinks
+              ln -svf lib''${library}$suffix.$dylibtype $out/lib/libtinfo$newsuffix.$dylibtype
+              ln -svf lib''${library}$suffix.$dylibtype.${abiVersion} $out/lib/libtinfo$newsuffix.$dylibtype.${abiVersion}
+            fi
           fi
         done
         for statictype in a dll.a la; do
@@ -104,11 +124,12 @@ stdenv.mkDerivation rec {
     moveToOutput "bin/clear" "$out"
     moveToOutput "bin/reset" "$out"
     moveToOutput "bin/tabs" "$out"
+    moveToOutput "bin/tic" "$out"
     moveToOutput "bin/tput" "$out"
     moveToOutput "bin/tset" "$out"
   '';
 
-  preFixup = ''
+  preFixup = lib.optionalString (!hostPlatform.isCygwin) ''
     rm "$out"/lib/*.a
   '';
 

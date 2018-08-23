@@ -1,7 +1,8 @@
-{ stdenv, fetchurl, gettext, intltool, pkgconfig, python
-, avahi, bluez, boost, eigen, fftw, glib, glibmm, gtk, gtkmm, libjack2
-, ladspaH, librdf, libsndfile, lilv, lv2, serd, sord, sratom
-, webkitgtk2, zita-convolver, zita-resampler
+{ stdenv, fetchurl, gettext, intltool, pkgconfig, python2
+, avahi, bluez, boost, eigen, fftw, glib, glib-networking
+, glibmm, gsettings-desktop-schemas, gtkmm2, libjack2
+, ladspaH, libav, librdf, libsndfile, lilv, lv2, serd, sord, sratom
+, wrapGAppsHook, zita-convolver, zita-resampler
 , optimizationSupport ? false # Enable support for native CPU extensions
 }:
 
@@ -11,19 +12,20 @@ in
 
 stdenv.mkDerivation rec {
   name = "guitarix-${version}";
-  version = "0.34.0";
+  version = "0.36.1";
 
   src = fetchurl {
-    url = "mirror://sourceforge/guitarix/guitarix2-${version}.tar.bz2";
-    sha256 = "0pamaq8iybsaglq6y1m1rlmz4wgbs2r6m24bj7x4fwg4grjvzjl8";
+    url = "mirror://sourceforge/guitarix/guitarix2-${version}.tar.xz";
+    sha256 = "1g5949jwh2n755xjs3kcbdb8a1wxr5mn0m115wdnk27dxcdn93b0";
   };
 
-  nativeBuildInputs = [ gettext intltool pkgconfig python ];
+  nativeBuildInputs = [ gettext intltool wrapGAppsHook pkgconfig python2 ];
 
   buildInputs = [
-    avahi bluez boost eigen fftw glib glibmm gtk gtkmm libjack2
-    ladspaH librdf libsndfile lilv lv2 serd sord sratom
-    webkitgtk2 zita-convolver zita-resampler
+    avahi bluez boost eigen fftw glib glibmm glib-networking.out
+    gsettings-desktop-schemas gtkmm2 libjack2 ladspaH libav librdf
+    libsndfile lilv lv2 serd sord sratom zita-convolver
+    zita-resampler
   ];
 
   configureFlags = [
@@ -31,15 +33,18 @@ stdenv.mkDerivation rec {
     "--no-desktop-update"
     "--enable-nls"
     "--no-faust" # todo: find out why --faust doesn't work
+    "--install-roboto-font"
+    "--includeresampler"
+    "--convolver-ffmpeg"
   ] ++ optional optimizationSupport "--optimization";
 
-  configurePhase = ''python waf configure --prefix=$out $configureFlags'';
+  configurePhase = ''python2 waf configure --prefix=$out $configureFlags'';
 
-  buildPhase = ''python waf build'';
+  buildPhase = ''python2 waf build'';
 
-  installPhase = ''python waf install'';
+  installPhase = ''python2 waf install'';
 
-  meta = with stdenv.lib; { 
+  meta = with stdenv.lib; {
     description = "A virtual guitar amplifier for Linux running with JACK";
     longDescription = ''
         guitarix is a virtual guitar amplifier for Linux running with

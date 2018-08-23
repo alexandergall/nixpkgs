@@ -7,7 +7,7 @@ stdenv.mkDerivation rec {
   version = "3.2015-09-08";
 
   src = fetchgit {
-    sha256 = "19d9c81d4eeabe87079d8f60e4cfa7303f776f5a7c9874642cf2bd188851d029";
+    sha256 = "146z57m8nblgsxm4z6qnsvcy81p11d0w88v93ybacc6w21plh8hc";
     rev = "e17bbae7a2ce454d9f69c32fc40066995d44913d";
     url = "git://git.fishsoup.net/git-bz";
   };
@@ -27,6 +27,7 @@ stdenv.mkDerivation rec {
 
   postInstall = ''
     wrapProgram $out/bin/git-bz \
+      --prefix PYTHONPATH : "$(toPythonPath "${pythonPackages.pycrypto}")" \
       --prefix PYTHONPATH : "$(toPythonPath "${pythonPackages.pysqlite}")"
   '';
 
@@ -48,7 +49,6 @@ stdenv.mkDerivation rec {
     license = licenses.gpl2Plus;
     homepage = http://git.fishsoup.net/cgit/git-bz/;
 
-    maintainers = with maintainers; [ nckx ];
     platforms = platforms.linux;
   };
 }

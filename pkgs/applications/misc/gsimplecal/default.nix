@@ -11,7 +11,8 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  buildInputs = [ pkgconfig automake autoconf gtk3 ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ automake autoconf gtk3 ];
 
   preConfigure = "./autogen.sh";
 
@@ -32,6 +33,6 @@ stdenv.mkDerivation rec {
     '';
     license = stdenv.lib.licenses.bsd3;
     maintainers = [ stdenv.lib.maintainers.romildo ];
-    platforms = stdenv.lib.platforms.unix;
+    platforms = stdenv.lib.platforms.linux;
   };
 }

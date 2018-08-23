@@ -1,14 +1,11 @@
-{ pkgs, stdenv, fetchFromGitHub, pkgconfig, intltool, wrapGAppsHook,
-  python, buildPythonApplication, isPy3k,
-  gnome3, gtk3, gobjectIntrospection,
-  dbus, pygobject3, mpd2 }:
+{ lib, stdenv, fetchFromGitHub, pkgconfig, intltool, wrapGAppsHook
+, python3Packages, gnome3, gtk3, gobjectIntrospection}:
 
-with pkgs.lib;
-
-buildPythonApplication rec {
+let
+  inherit (python3Packages) buildPythonApplication python isPy3k dbus-python pygobject3 mpd2;
+in buildPythonApplication rec {
   name = "sonata-${version}";
   version = "1.7b1";
-  namePrefix = "";
 
   src = fetchFromGitHub {
     owner = "multani";
@@ -19,10 +16,11 @@ buildPythonApplication rec {
 
   disabled = !isPy3k;
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig intltool wrapGAppsHook
-    gnome3.gnome_themes_standard gnome3.defaultIconTheme
-    gnome3.gsettings_desktop_schemas
+    intltool wrapGAppsHook
+    gnome3.gnome-themes-standard gnome3.defaultIconTheme
+    gnome3.gsettings-desktop-schemas
   ];
 
   postPatch = ''
@@ -30,7 +28,7 @@ buildPythonApplication rec {
     sed -i '/localmpd/d' sonata/consts.py
   '';
 
-  propagatedUserEnvPkgs = [ gnome3.gnome_themes_standard ];
+  propagatedUserEnvPkgs = [ gnome3.gnome-themes-standard ];
 
   propagatedBuildInputs = [
     gobjectIntrospection gtk3 pygobject3
@@ -38,7 +36,7 @@ buildPythonApplication rec {
 
   # The optional tagpy dependency (for editing metadata) is not yet
   # included because it's difficult to build.
-  pythonPath = [ dbus pygobject3 mpd2 ];
+  pythonPath = [ dbus-python pygobject3 mpd2 ];
 
   meta = {
     description = "An elegant client for the Music Player Daemon";
@@ -65,7 +63,7 @@ buildPythonApplication rec {
        - Commandline control
        - Available in 24 languages
     '';
-    homepage = "http://www.nongnu.org/sonata/";
+    homepage = http://www.nongnu.org/sonata/;
     license = stdenv.lib.licenses.gpl3;
     platforms = stdenv.lib.platforms.linux;
     maintainers = [ stdenv.lib.maintainers.rvl ];

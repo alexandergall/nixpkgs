@@ -4,7 +4,7 @@ with lib;
 
 let
 
-  inherit (pkgs) cups cups-pk-helper cups_filters gutenprint;
+  inherit (pkgs) cups cups-pk-helper cups-filters;
 
   cfg = config.services.printing;
 
@@ -34,10 +34,9 @@ let
   bindir = pkgs.buildEnv {
     name = "cups-progs";
     paths =
-      [ cups additionalBackends cups_filters pkgs.ghostscript ]
-      ++ optional cfg.gutenprint gutenprint
+      [ cups.out additionalBackends cups-filters pkgs.ghostscript ]
       ++ cfg.drivers;
-    pathsToLink = [ "/lib/cups" "/share/cups" "/bin" ];
+    pathsToLink = [ "/lib" "/share/cups" "/bin" ];
     postBuild = cfg.bindirCmds;
     ignoreCollisions = true;
   };
@@ -52,6 +51,7 @@ let
 
     ServerBin ${bindir}/lib/cups
     DataDir ${bindir}/share/cups
+    DocumentRoot ${cups.out}/share/doc/cups
 
     AccessLog syslog
     ErrorLog syslog
@@ -75,7 +75,7 @@ let
     '') cfg.listenAddresses}
     Listen /var/run/cups/cups.sock
 
-    SetEnv PATH ${bindir}/lib/cups/filter:${bindir}/bin
+    SetEnv PATH /var/lib/cups/path/lib/cups/filter:/var/lib/cups/path/bin
 
     DefaultShared ${if cfg.defaultShared then "Yes" else "No"}
 
@@ -96,11 +96,14 @@ let
       (writeConf "client.conf" cfg.clientConf)
       (writeConf "snmp.conf" cfg.snmpConf)
     ] ++ optional avahiEnabled browsedFile
-      ++ optional cfg.gutenprint gutenprint
       ++ cfg.drivers;
     pathsToLink = [ "/etc/cups" ];
     ignoreCollisions = true;
   };
+
+  filterGutenprint = pkgs: filter (pkg: pkg.meta.isGutenprint or false == true) pkgs;
+  containsGutenprint = pkgs: length (filterGutenprint pkgs) > 0;
+  getGutenprint = pkgs: head (filterGutenprint pkgs);
 
 in
 
@@ -223,23 +226,17 @@ in
         '';
       };
 
-      gutenprint = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Whether to enable Gutenprint drivers for CUPS. This includes auto-updating
-          Gutenprint PPD files.
-        '';
-      };
-
       drivers = mkOption {
         type = types.listOf types.path;
         default = [];
-        example = literalExample "[ pkgs.splix ]";
+        example = literalExample "[ pkgs.gutenprint pkgs.hplip pkgs.splix ]";
         description = ''
-          CUPS drivers to use. Drivers provided by CUPS, cups-filters, Ghostscript
-          and Samba are added unconditionally. For adding Gutenprint, see
-          <literal>gutenprint</literal>.
+          CUPS drivers to use. Drivers provided by CUPS, cups-filters,
+          Ghostscript and Samba are added unconditionally. If this list contains
+          Gutenprint (i.e. a derivation with
+          <literal>meta.isGutenprint = true</literal>) the PPD files in
+          <filename>/var/lib/cups/ppd</filename> will be updated automatically
+          to avoid errors due to incompatible versions.
         '';
       };
 
@@ -267,24 +264,24 @@ in
         description = "CUPS printing services";
       };
 
-    environment.systemPackages = [ cups ] ++ optional polkitEnabled cups-pk-helper;
+    environment.systemPackages = [ cups.out ] ++ optional polkitEnabled cups-pk-helper;
     environment.etc."cups".source = "/var/lib/cups";
 
-    services.dbus.packages = [ cups ] ++ optional polkitEnabled cups-pk-helper;
+    services.dbus.packages = [ cups.out ] ++ optional polkitEnabled cups-pk-helper;
 
     # Cups uses libusb to talk to printers, and does not use the
     # linux kernel driver. If the driver is not in a black list, it
     # gets loaded, and then cups cannot access the printers.
     boot.blacklistedKernelModules = [ "usblp" ];
 
-    systemd.packages = [ cups ];
+    systemd.packages = [ cups.out ];
 
     systemd.services.cups =
       { wantedBy = [ "multi-user.target" ];
         wants = [ "network.target" ];
         after = [ "network.target" ];
 
-        path = [ cups ];
+        path = [ cups.out ];
 
         preStart =
           ''
@@ -310,12 +307,21 @@ in
             for i in *; do
               [ ! -e "/var/lib/cups/$i" ] && ln -s "${rootdir}/etc/cups/$i" "/var/lib/cups/$i"
             done
-            ${optionalString cfg.gutenprint ''
+
+            #update path reference
+            [ -L /var/lib/cups/path ] && \
+              rm /var/lib/cups/path
+            [ ! -e /var/lib/cups/path ] && \
+              ln -s ${bindir} /var/lib/cups/path
+
+            ${optionalString (containsGutenprint cfg.drivers) ''
               if [ -d /var/lib/cups/ppd ]; then
-                ${gutenprint}/bin/cups-genppdupdate -p /var/lib/cups/ppd
+                ${getGutenprint cfg.drivers}/bin/cups-genppdupdate -p /var/lib/cups/ppd
               fi
             ''}
           '';
+
+          serviceConfig.PrivateTmp = true;
       };
 
     systemd.services.cups-browsed = mkIf avahiEnabled
@@ -329,7 +335,7 @@ in
 
         path = [ cups ];
 
-        serviceConfig.ExecStart = "${cups_filters}/bin/cups-browsed";
+        serviceConfig.ExecStart = "${cups-filters}/bin/cups-browsed";
 
         restartTriggers = [ browsedFile ];
       };

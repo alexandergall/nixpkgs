@@ -1,13 +1,17 @@
-{ stdenv, buildEnv, fetchurl, patchelf, bash
+{ stdenv, fetchurl, patchelf, bash
 
 # Linked dynamic libraries.
 , glib, fontconfig, freetype, pango, cairo, libX11, libXi, atk, gconf, nss, nspr
-, libXcursor, libXext, libXfixes, libXrender, libXScrnSaver, libXcomposite
+, libXcursor, libXext, libXfixes, libXrender, libXScrnSaver, libXcomposite, libxcb
 , alsaLib, libXdamage, libXtst, libXrandr, expat, cups
-, dbus_libs, gtk, gdk_pixbuf, gcc
+, dbus_libs, gtk2, gtk3, gdk_pixbuf, gcc-unwrapped, at-spi2-atk
+, kerberos
+
+# command line arguments which are always set e.g "--disable-gpu"
+, commandLineArgs ? ""
 
 # Will crash without.
-, udev
+, systemd
 
 # Loaded at runtime.
 , libexif
@@ -26,47 +30,64 @@
 # Necessary for USB audio devices.
 , pulseSupport ? true, libpulseaudio ? null
 
+# Only needed for getting information about upstream binaries
+, chromium
+
+, gsettings-desktop-schemas
+, gnome2, gnome3
 }:
 
 with stdenv.lib;
-
-with (import ../chromium/update.nix {
-  inherit (stdenv) system;
-}).getChannel channel;
 
 let
   opusWithCustomModes = libopus.override {
     withCustomModes = true;
   };
 
-  env = buildEnv {
-    name = "google-chrome-env";
-    paths = [
-      glib fontconfig freetype pango cairo libX11 libXi atk gconf nss nspr
-      libXcursor libXext libXfixes libXrender libXScrnSaver libXcomposite
-      alsaLib libXdamage libXtst libXrandr expat cups
-      dbus_libs gtk gdk_pixbuf gcc
-      udev
-      libexif
-      liberation_ttf curl utillinux xdg_utils wget
-      flac harfbuzz icu libpng opusWithCustomModes snappy speechd
-      bzip2 libcap
-    ]
-    ++ optional pulseSupport libpulseaudio;
-  };
+  version = chromium.upstream-info.version;
+  gtk = if (versionAtLeast version "59.0.0.0") then gtk3 else gtk2;
+  gnome = if (versionAtLeast version "59.0.0.0") then gnome3 else gnome2;
+
+  deps = [
+    glib fontconfig freetype pango cairo libX11 libXi atk gconf nss nspr
+    libXcursor libXext libXfixes libXrender libXScrnSaver libXcomposite libxcb
+    alsaLib libXdamage libXtst libXrandr expat cups
+    dbus_libs gdk_pixbuf gcc-unwrapped.lib
+    systemd
+    libexif
+    liberation_ttf curl utillinux xdg_utils wget
+    flac harfbuzz icu libpng opusWithCustomModes snappy speechd
+    bzip2 libcap at-spi2-atk
+    kerberos
+  ] ++ optional pulseSupport libpulseaudio
+    ++ [ gtk ];
+
+  suffix = if channel != "stable" then "-" + channel else "";
+
 in stdenv.mkDerivation rec {
   inherit version;
 
-  name = "google-chrome-${version}";
+  name = "google-chrome${suffix}-${version}";
 
-  src = binary;
+  src = chromium.upstream-info.binary;
 
-  buildInputs = [ env patchelf ];
+  buildInputs = [
+    patchelf
+
+    # needed for GSETTINGS_SCHEMAS_PATH
+    gsettings-desktop-schemas glib gtk
+
+    # needed for XDG_ICON_DIRS
+    gnome.defaultIconTheme
+  ];
 
   unpackPhase = ''
     ar x $src
     tar xf data.tar.xz
   '';
+
+  rpath = makeLibraryPath deps + ":" + makeSearchPathOutput "lib" "lib64" deps;
+  binpath = makeBinPath deps;
 
   installPhase = ''
     case ${channel} in
@@ -76,7 +97,6 @@ in stdenv.mkDerivation rec {
     esac
 
     exe=$out/bin/google-chrome-$dist
-    rpath="${env}/lib:${env}/lib64"
 
     mkdir -p $out/bin $out/share
 
@@ -103,8 +123,9 @@ in stdenv.mkDerivation rec {
     cat > $exe << EOF
     #!${bash}/bin/sh
     export LD_LIBRARY_PATH=$rpath\''${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}
-    export PATH=${env}/bin\''${PATH:+:\$PATH}
-    $out/share/google/$appname/google-$appname "\$@"
+    export PATH=$binpath\''${PATH:+:\$PATH}
+    export XDG_DATA_DIRS=$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH\''${XDG_DATA_DIRS:+:}\$XDG_DATA_DIRS
+    $out/share/google/$appname/google-$appname ${commandLineArgs} "\$@"
     EOF
     chmod +x $exe
 
@@ -119,6 +140,6 @@ in stdenv.mkDerivation rec {
     homepage = https://www.google.com/chrome/browser/;
     license = licenses.unfree;
     maintainers = [ maintainers.msteen ];
-    platforms = platforms.linux;
+    platforms = [ "x86_64-linux" ];
   };
 }

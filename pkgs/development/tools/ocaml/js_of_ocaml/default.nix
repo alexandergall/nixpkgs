@@ -1,24 +1,28 @@
-{stdenv, fetchurl, ocaml, findlib, ocaml_lwt, menhir, ocsigen_deriving, camlp4,
- cmdliner, tyxml, reactivedata, cppo, which, base64}:
+{ stdenv, fetchurl, ocaml, findlib, lwt, menhir, ocsigen_deriving, ppx_deriving, camlp4, ocamlbuild
+, cmdliner, tyxml, reactivedata, cppo, which, base64, uchar, yojson
+}:
 
-let camlp4_patch = fetchurl {
-    url = "https://github.com/FlorentBecker/js_of_ocaml/commit/3b511c5bb777d5049c49d7a04c01f142de7096b9.patch";
-    sha256 = "c92eda8be504cd41eb242166fc815af496243b63d4d21b169f5b62ec5ace2d39";
-    };
+let version = if stdenv.lib.versionAtLeast ocaml.version "4.02"
+  then "2.8.4" else "2.7";
 in
- 
+
 stdenv.mkDerivation {
-  name = "js_of_ocaml-2.6";
+  name = "js_of_ocaml-${version}";
   src = fetchurl {
-    url = https://github.com/ocsigen/js_of_ocaml/archive/2.6.tar.gz;
-    sha256 = "0q34lrn70dvz41m78bwgriyq6dxk97g8gcyg80nvxii4jp86dw61";
-    };
+    url = "https://github.com/ocsigen/js_of_ocaml/archive/${version}.tar.gz";
+    sha256 = {
+      "2.7" = "1dali1akyd4zmkwav0d957ynxq2jj6cc94r4xiaql7ca89ajz4jj";
+      "2.8.4" = "098ph50s9kqw6rc3qjn39zv9b5swdf4qr44afwqfkkjgjs5d7vbl";
+    }."${version}";
+  };
 
-  buildInputs = [ocaml findlib menhir ocsigen_deriving
-                 cmdliner tyxml reactivedata cppo which base64];
-  propagatedBuildInputs = [ ocaml_lwt camlp4 ];
+  buildInputs = [ ocaml findlib menhir ocsigen_deriving ocamlbuild
+                 cmdliner reactivedata cppo which base64 ]
+  ++ stdenv.lib.optionals (stdenv.lib.versionAtLeast ocaml.version "4.02") [ yojson tyxml ];
+  propagatedBuildInputs = [ lwt camlp4 ppx_deriving ]
+  ++ stdenv.lib.optional (version == "2.8.4") uchar;
 
-  patches = [ ./Makefile.conf.diff camlp4_patch ];
+  patches = [ ./Makefile.conf.diff ];
 
   createFindlibDestdir = true;
 
@@ -30,5 +34,6 @@ stdenv.mkDerivation {
     maintainers = [
       maintainers.gal_bolle
     ];
+    broken = versionAtLeast ocaml.version "4.05";
   };
 }

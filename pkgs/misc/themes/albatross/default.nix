@@ -20,7 +20,8 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "A desktop Suite for Xfce";
-    homepage = http://shimmerproject.org/our-projects/albatross/;
+    homepage = https://github.com/shimmerproject/Albatross;
     license = stdenv.lib.licenses.gpl2;
+    platforms = stdenv.lib.platforms.unix;
   };
 }

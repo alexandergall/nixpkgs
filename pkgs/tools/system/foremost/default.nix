@@ -15,6 +15,8 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
+  hardeningDisable = [ "format" ];
+
   preInstall = ''
     mkdir -p $out/{bin,share/man/man8}
   '';
@@ -33,6 +35,5 @@ stdenv.mkDerivation rec {
     homepage = http://foremost.sourceforge.net/;
     license = licenses.publicDomain;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

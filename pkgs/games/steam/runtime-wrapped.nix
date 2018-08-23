@@ -1,13 +1,11 @@
-{ stdenv, lib, perl, pkgs, steam-runtime
+{ stdenv, steamArch, lib, perl, pkgs, steam-runtime
 , nativeOnly ? false
 , runtimeOnly ? false
-, newStdcpp ? false
 }:
 
 assert !(nativeOnly && runtimeOnly);
-assert newStdcpp -> !runtimeOnly;
 
-let 
+let
   runtimePkgs = with pkgs; [
     # Required
     glib
@@ -22,12 +20,13 @@ let
     xlibs.libXcursor
     xlibs.libXrender
     xlibs.libXScrnSaver
+    xlibs.libXxf86vm
     xlibs.libXi
     xlibs.libSM
     xlibs.libICE
     gnome2.GConf
     freetype
-    curl
+    (curl.override { gnutlsSupport = true; sslSupport = false; })
     nspr
     nss
     fontconfig
@@ -39,18 +38,17 @@ let
     libcap
     SDL2
     libusb1
-    dbus_glib
+    dbus-glib
     libav
     atk
     # Only libraries are needed from those two
-    udev182
+    libudev0-shim
     networkmanager098
 
     # Verified games requirements
     xlibs.libXmu
     xlibs.libxcb
-    xlibs.libpciaccess
-    mesa_glu
+    libGLU
     libuuid
     libogg
     libvorbis
@@ -59,6 +57,7 @@ let
     glew110
     openssl
     libidn
+    tbb
 
     # Other things from runtime
     xlibs.libXinerama
@@ -78,34 +77,49 @@ let
     SDL2_ttf
     SDL2_mixer
     gstreamer
-    gst_plugins_base
-  ] ++ lib.optional (!newStdcpp) gcc48.cc;
+    gst-plugins-base
+  ];
 
   overridePkgs = with pkgs; [
+    libgpgerror
     libpulseaudio
     alsaLib
     openalSoft
     libva
-  ] ++ lib.optional newStdcpp gcc.cc;
+    vulkan-loader
+    gcc.cc
+    nss
+    nspr
+  ];
 
   ourRuntime = if runtimeOnly then []
                else if nativeOnly then runtimePkgs ++ overridePkgs
                else overridePkgs;
   steamRuntime = lib.optional (!nativeOnly) steam-runtime;
 
+  allPkgs = ourRuntime ++ steamRuntime;
+
+  gnuArch = if steamArch == "amd64" then "x86_64-linux-gnu"
+            else if steamArch == "i386" then "i386-linux-gnu"
+            else abort "Unsupported architecture";
+
+  libs = [ "lib/${gnuArch}" "lib" "usr/lib/${gnuArch}" "usr/lib" ];
+  bins = [ "bin" "usr/bin" ];
+
 in stdenv.mkDerivation rec {
   name = "steam-runtime-wrapped";
-
-  allPkgs = ourRuntime ++ steamRuntime;
 
   nativeBuildInputs = [ perl ];
 
   builder = ./build-wrapped.sh;
 
-  installPhase = ''
-    buildDir "${toString steam-runtime.libs}" "$allPkgs"
-    buildDir "${toString steam-runtime.bins}" "$allPkgs"
-  '';
+  passthru = {
+    inherit gnuArch libs bins;
+    arch = steamArch;
+  };
 
-  meta.hydraPlatforms = [];
+  installPhase = ''
+    buildDir "${toString libs}" "${toString (map lib.getLib allPkgs)}"
+    buildDir "${toString bins}" "${toString (map lib.getBin allPkgs)}"
+  '';
 }

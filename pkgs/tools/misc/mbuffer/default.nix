@@ -3,21 +3,21 @@
  } :
 
 stdenv.mkDerivation rec {
-  version = "20151002";
+  version = "20171011";
   name = "mbuffer-${version}";
 
   src = fetchurl {
     url = "http://www.maier-komor.de/software/mbuffer/mbuffer-${version}.tgz";
-    sha256 = "04pz70jr7fkdyax7b67g9jr0msl6ff2i8s6fl8zginqz5rrxckqk";
+    sha256 = "1z6is359dnlf61n6ida9ivghafzz5m8cf4hzdhma8nxv12brfbzb";
   };
 
   buildInputs = [ openssl ];
 
   meta = {
     homepage = http://www.maier-komor.de/mbuffer.html;
-    description  = "mbuffer is a tool for buffering data streams with a large set of unique features";
+    description  = "A tool for buffering data streams with a large set of unique features";
     license = stdenv.lib.licenses.gpl3;
     maintainers = with stdenv.lib.maintainers; [ tokudan ];
-    platforms = with stdenv.lib.platforms; all;
+    platforms = with stdenv.lib.platforms; allBut darwin;
   };
 }

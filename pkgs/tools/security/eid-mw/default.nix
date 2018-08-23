@@ -1,19 +1,20 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, gtk3, nssTools, pcsclite
-, pkgconfig }:
+{ stdenv, fetchFromGitHub
+, autoreconfHook, pkgconfig
+, gtk3, nssTools, pcsclite }:
 
 stdenv.mkDerivation rec {
   name = "eid-mw-${version}";
-  version = "4.1.13";
+  version = "4.1.19";
 
   src = fetchFromGitHub {
-    sha256 = "1fkazhw6gs191w789fnp6mwnxrx9p38b3kh5bngb1ir0zhkgghkq";
+    sha256 = "191c74kxfrfb894v8y4vi2iygyffjy9jjq5fj7cnnddgwai5n3c5";
     rev = "v${version}";
     repo = "eid-mw";
     owner = "Fedict";
   };
 
-  buildInputs = [ gtk3 pcsclite ];
   nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [ gtk3 pcsclite ];
 
   postPatch = ''
     sed 's@m4_esyscmd_s(.*,@[${version}],@' -i configure.ac
@@ -56,7 +57,6 @@ stdenv.mkDerivation rec {
 
       and remove all ~/.pki and/or /etc/pki directories no longer needed.
     '';
-    maintainers = with maintainers; [ nckx ];
     platforms = platforms.linux;
   };
 }

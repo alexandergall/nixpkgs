@@ -1,6 +1,6 @@
 # General list operations.
-
-with import ./trivial.nix;
+{ lib }:
+with lib.trivial;
 
 rec {
 
@@ -16,17 +16,22 @@ rec {
   */
   singleton = x: [x];
 
-  /* "Fold" a binary function `op' between successive elements of
-     `list' with `nul' as the starting value, i.e., `fold op nul [x_1
-     x_2 ... x_n] == op x_1 (op x_2 ... (op x_n nul))'.  (This is
-     Haskell's foldr).
+  /* “right fold” a binary function `op' between successive elements of
+     `list' with `nul' as the starting value, i.e.,
+     `foldr op nul [x_1 x_2 ... x_n] == op x_1 (op x_2 ... (op x_n nul))'.
+     Type:
+       foldr :: (a -> b -> b) -> b -> [a] -> b
 
      Example:
-       concat = fold (a: b: a + b) "z"
+       concat = foldr (a: b: a + b) "z"
        concat [ "a" "b" "c" ]
-       => "abcnul"
+       => "abcz"
+       # different types
+       strange = foldr (int: str: toString (int + 1) + str) "a"
+       strange [ 1 2 3 4 ]
+       => "2345a"
   */
-  fold = op: nul: list:
+  foldr = op: nul: list:
     let
       len = length list;
       fold' = n:
@@ -35,13 +40,25 @@ rec {
         else op (elemAt list n) (fold' (n + 1));
     in fold' 0;
 
-  /* Left fold: `fold op nul [x_1 x_2 ... x_n] == op (... (op (op nul
-     x_1) x_2) ... x_n)'.
+  /* `fold' is an alias of `foldr' for historic reasons */
+  # FIXME(Profpatsch): deprecate?
+  fold = foldr;
+
+
+  /* “left fold”, like `foldr', but from the left:
+     `foldl op nul [x_1 x_2 ... x_n] == op (... (op (op nul x_1) x_2) ... x_n)`.
+
+     Type:
+       foldl :: (b -> a -> b) -> b -> [a] -> b
 
      Example:
        lconcat = foldl (a: b: a + b) "z"
        lconcat [ "a" "b" "c" ]
        => "zabc"
+       # different types
+       lstrange = foldl (str: int: str + toString (int + 1)) ""
+       strange [ 1 2 3 4 ]
+       => "a2345"
   */
   foldl = op: nul: list:
     let
@@ -52,7 +69,7 @@ rec {
         else op (foldl' (n - 1)) (elemAt list n);
     in foldl' (length list - 1);
 
-  /* Strict version of foldl.
+  /* Strict version of `foldl'.
 
      The difference is that evaluation is forced upon access. Usually used
      with small whole results (in contract with lazily-generated list or large
@@ -60,26 +77,21 @@ rec {
   */
   foldl' = builtins.foldl' or foldl;
 
-  /* Map with index
-
-     FIXME(zimbatm): why does this start to count at 1?
+  /* Map with index starting from 0
 
      Example:
-       imap (i: v: "${v}-${toString i}") ["a" "b"]
+       imap0 (i: v: "${v}-${toString i}") ["a" "b"]
+       => [ "a-0" "b-1" ]
+  */
+  imap0 = f: list: genList (n: f n (elemAt list n)) (length list);
+
+  /* Map with index starting from 1
+
+     Example:
+       imap1 (i: v: "${v}-${toString i}") ["a" "b"]
        => [ "a-1" "b-2" ]
   */
-  imap =
-    if builtins ? genList then
-      f: list: genList (n: f (n + 1) (elemAt list n)) (length list)
-    else
-      f: list:
-      let
-        len = length list;
-        imap' = n:
-          if n == len
-            then []
-            else [ (f (n + 1) (elemAt list n)) ] ++ imap' (n + 1);
-      in imap' 0;
+  imap1 = f: list: genList (n: f (n + 1) (elemAt list n)) (length list);
 
   /* Map and concatenate the result.
 
@@ -100,7 +112,7 @@ rec {
   */
   flatten = x:
     if isList x
-    then foldl' (x: y: x ++ (flatten y)) [] x
+    then concatMap (y: flatten y) x
     else [x];
 
   /* Remove elements equal to 'e' from a list.  Useful for buildInputs.
@@ -151,7 +163,7 @@ rec {
        any isString [ 1 { } ]
        => false
   */
-  any = builtins.any or (pred: fold (x: y: if pred x then true else y) false);
+  any = builtins.any or (pred: foldr (x: y: if pred x then true else y) false);
 
   /* Return true iff function `pred' returns true for all elements of
      `list'.
@@ -162,7 +174,7 @@ rec {
        all (x: x < 3) [ 1 2 3 ]
        => false
   */
-  all = builtins.all or (pred: fold (x: y: if pred x then y else false) true);
+  all = builtins.all or (pred: foldr (x: y: if pred x then y else false) true);
 
   /* Count how many times function `pred' returns true for the elements
      of `list'.
@@ -185,7 +197,7 @@ rec {
   */
   optional = cond: elem: if cond then [elem] else [];
 
-  /* Return a list or an empty list, dependening on a boolean value.
+  /* Return a list or an empty list, depending on a boolean value.
 
      Example:
        optionals true [ 2 3 ]
@@ -216,17 +228,11 @@ rec {
        range 3 2
        => [ ]
   */
-  range =
-    if builtins ? genList then
-      first: last:
-        if first > last
-        then []
-        else genList (n: first + n) (last - first + 1)
+  range = first: last:
+    if first > last then
+      []
     else
-      first: last:
-        if last < first
-        then []
-        else [first] ++ range (first + 1) last;
+      genList (n: first + n) (last - first + 1);
 
   /* Splits the elements of a list in two lists, `right' and
      `wrong', depending on the evaluation of a predicate.
@@ -235,12 +241,12 @@ rec {
        partition (x: x > 2) [ 5 1 2 3 4 ]
        => { right = [ 5 3 4 ]; wrong = [ 1 2 ]; }
   */
-  partition = pred:
-    fold (h: t:
+  partition = builtins.partition or (pred:
+    foldr (h: t:
       if pred h
       then { right = [h] ++ t.right; wrong = t.wrong; }
       else { right = t.right; wrong = [h] ++ t.wrong; }
-    ) { right = []; wrong = []; };
+    ) { right = []; wrong = []; });
 
   /* Merges two lists of the same size together. If the sizes aren't the same
      the merging stops at the shortest. How both lists are merged is defined
@@ -250,19 +256,9 @@ rec {
        zipListsWith (a: b: a + b) ["h" "l"] ["e" "o"]
        => ["he" "lo"]
   */
-  zipListsWith =
-    if builtins ? genList then
-      f: fst: snd: genList (n: f (elemAt fst n) (elemAt snd n)) (min (length fst) (length snd))
-    else
-      f: fst: snd:
-      let
-        len = min (length fst) (length snd);
-        zipListsWith' = n:
-          if n != len then
-            [ (f (elemAt fst n) (elemAt snd n)) ]
-            ++ zipListsWith' (n + 1)
-          else [];
-      in zipListsWith' 0;
+  zipListsWith = f: fst: snd:
+    genList
+      (n: f (elemAt fst n) (elemAt snd n)) (min (length fst) (length snd));
 
   /* Merges two lists of the same size together. If the sizes aren't the same
      the merging stops at the shortest.
@@ -280,11 +276,88 @@ rec {
        reverseList [ "b" "o" "j" ]
        => [ "j" "o" "b" ]
   */
-  reverseList =
-    if builtins ? genList then
-      xs: let l = length xs; in genList (n: elemAt xs (l - n - 1)) l
-    else
-      fold (e: acc: acc ++ [ e ]) [];
+  reverseList = xs:
+    let l = length xs; in genList (n: elemAt xs (l - n - 1)) l;
+
+  /* Depth-First Search (DFS) for lists `list != []`.
+
+     `before a b == true` means that `b` depends on `a` (there's an
+     edge from `b` to `a`).
+
+     Examples:
+
+         listDfs true hasPrefix [ "/home/user" "other" "/" "/home" ]
+           == { minimal = "/";                  # minimal element
+                visited = [ "/home/user" ];     # seen elements (in reverse order)
+                rest    = [ "/home" "other" ];  # everything else
+              }
+
+         listDfs true hasPrefix [ "/home/user" "other" "/" "/home" "/" ]
+           == { cycle   = "/";                  # cycle encountered at this element
+                loops   = [ "/" ];              # and continues to these elements
+                visited = [ "/" "/home/user" ]; # elements leading to the cycle (in reverse order)
+                rest    = [ "/home" "other" ];  # everything else
+
+   */
+
+  listDfs = stopOnCycles: before: list:
+    let
+      dfs' = us: visited: rest:
+        let
+          c = filter (x: before x us) visited;
+          b = partition (x: before x us) rest;
+        in if stopOnCycles && (length c > 0)
+           then { cycle = us; loops = c; inherit visited rest; }
+           else if length b.right == 0
+                then # nothing is before us
+                     { minimal = us; inherit visited rest; }
+                else # grab the first one before us and continue
+                     dfs' (head b.right)
+                          ([ us ] ++ visited)
+                          (tail b.right ++ b.wrong);
+    in dfs' (head list) [] (tail list);
+
+  /* Sort a list based on a partial ordering using DFS. This
+     implementation is O(N^2), if your ordering is linear, use `sort`
+     instead.
+
+     `before a b == true` means that `b` should be after `a`
+     in the result.
+
+     Examples:
+
+         toposort hasPrefix [ "/home/user" "other" "/" "/home" ]
+           == { result = [ "/" "/home" "/home/user" "other" ]; }
+
+         toposort hasPrefix [ "/home/user" "other" "/" "/home" "/" ]
+           == { cycle = [ "/home/user" "/" "/" ]; # path leading to a cycle
+                loops = [ "/" ]; }                # loops back to these elements
+
+         toposort hasPrefix [ "other" "/home/user" "/home" "/" ]
+           == { result = [ "other" "/" "/home" "/home/user" ]; }
+
+         toposort (a: b: a < b) [ 3 2 1 ] == { result = [ 1 2 3 ]; }
+
+   */
+
+  toposort = before: list:
+    let
+      dfsthis = listDfs true before list;
+      toporest = toposort before (dfsthis.visited ++ dfsthis.rest);
+    in
+      if length list < 2
+      then # finish
+           { result =  list; }
+      else if dfsthis ? "cycle"
+           then # there's a cycle, starting from the current vertex, return it
+                { cycle = reverseList ([ dfsthis.cycle ] ++ dfsthis.visited);
+                  inherit (dfsthis) loops; }
+           else if toporest ? "cycle"
+                then # there's a cycle somewhere else in the graph, return it
+                     toporest
+                # Slow, but short. Can be made a bit faster with an explicit stack.
+                else # there are no cycles
+                     { result = [ dfsthis.minimal ] ++ toporest.result; };
 
   /* Sort a list based on a comparator function which compares two
      elements and returns true if the first argument is strictly below
@@ -312,6 +385,30 @@ rec {
       if len < 2 then list
       else (sort strictLess pivot.left) ++  [ first ] ++  (sort strictLess pivot.right));
 
+  /* Compare two lists element-by-element.
+
+     Example:
+       compareLists compare [] []
+       => 0
+       compareLists compare [] [ "a" ]
+       => -1
+       compareLists compare [ "a" ] []
+       => 1
+       compareLists compare [ "a" "b" ] [ "a" "c" ]
+       => 1
+  */
+  compareLists = cmp: a: b:
+    if a == []
+    then if b == []
+         then 0
+         else -1
+    else if b == []
+         then 1
+         else let rel = cmp (head a) (head b); in
+              if rel == 0
+              then compareLists cmp (tail a) (tail b)
+              else rel;
+
   /* Return the first (at most) N elements of a list.
 
      Example:
@@ -320,19 +417,7 @@ rec {
        take 2 [ ]
        => [ ]
   */
-  take =
-    if builtins ? genList then
-      count: sublist 0 count
-    else
-      count: list:
-        let
-          len = length list;
-          take' = n:
-            if n == len || n == count
-              then []
-            else
-              [ (elemAt list n) ] ++ take' (n + 1);
-        in take' 0;
+  take = count: sublist 0 count;
 
   /* Remove the first (at most) N elements of a list.
 
@@ -342,19 +427,7 @@ rec {
        drop 2 [ ]
        => [ ]
   */
-  drop =
-    if builtins ? genList then
-      count: list: sublist count (length list) list
-    else
-      count: list:
-        let
-          len = length list;
-          drop' = n:
-            if n == -1 || n < count
-              then []
-            else
-              drop' (n - 1) ++ [ (elemAt list n) ];
-        in drop' (len - 1);
+  drop = count: list: sublist count (length list) list;
 
   /* Return a list consisting of at most ‘count’ elements of ‘list’,
      starting at index ‘start’.
@@ -391,8 +464,12 @@ rec {
   init = list: assert list != []; take (length list - 1) list;
 
 
-  /* FIXME(zimbatm) Not used anywhere
-   */
+  /* return the image of the cross product of some lists by a function
+
+    Example:
+      crossLists (x:y: "${toString x}${toString y}") [[1 2] [3 4]]
+      => [ "13" "14" "23" "24" ]
+  */
   crossLists = f: foldl (fs: args: concatMap (f: map f args) fs) [f];
 
 
@@ -428,8 +505,12 @@ rec {
   */
   subtractLists = e: filter (x: !(elem x e));
 
-  /*** deprecated stuff ***/
-
-  deepSeqList = throw "removed 2016-02-29 because unused and broken";
+  /* Test if two lists have no common element.
+     It should be slightly more efficient than (intersectLists a b == [])
+  */
+  mutuallyExclusive = a: b:
+    (builtins.length a) == 0 ||
+    (!(builtins.elem (builtins.head a) b) &&
+     mutuallyExclusive (builtins.tail a) b);
 
 }

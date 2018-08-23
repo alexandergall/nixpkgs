@@ -1,101 +1,104 @@
-{ callPackage, stdenv, fetchurl, makeWrapper
-, jq, xlibs, gtk, python, nodejs
-, ...
-} @ args:
+{ stdenv, lib, callPackage, fetchurl, unzip, atomEnv, makeDesktopItem,
+  makeWrapper, libXScrnSaver, libxkbfile, libsecret }:
 
 let
-  electron = callPackage ../../../development/tools/electron/default.nix (args // rec {
-    version = "0.35.6";
-    sha256 = "1bwn14769nby04zkza9jphsya2p6fjnkm1k2y4h5y2l4gnqdvmx0";
-  });
+  version = "1.20.1";
+  channel = "stable";
+
+  plat = {
+    "i686-linux" = "linux-ia32";
+    "x86_64-linux" = "linux-x64";
+    "x86_64-darwin" = "darwin";
+  }.${stdenv.system};
+
+  sha256 = {
+    "i686-linux" = "0gycz857bl9ikfrylim970qgmyw7rcy3gbg2zsjddp9cgdk9basn";
+    "x86_64-linux" = "0rx0qyxv173s9wjw97f94h61f12lh42grnmabgsvwd87b8zx4qim";
+    "x86_64-darwin" = "0mqxmmkp3bsmy1g35prsgan61zzq5368gp720v37cwx1rskl0bfg";
+  }.${stdenv.system};
+
+  archive_fmt = if stdenv.system == "x86_64-darwin" then "zip" else "tar.gz";
+
+  rpath = lib.concatStringsSep ":" [
+    atomEnv.libPath
+    "${lib.makeLibraryPath [libsecret]}/libsecret-1.so.0"
+    "${lib.makeLibraryPath [libXScrnSaver]}/libXss.so.1"
+    "${lib.makeLibraryPath [libxkbfile]}/libxkbfile.so.1"
+    "$out/lib/vscode"
+  ];
+
 in
   stdenv.mkDerivation rec {
     name = "vscode-${version}";
-    version = "0.10.10";
 
     src = fetchurl {
-      url = "https://github.com/Microsoft/vscode/archive/${version}.tar.gz";
-      sha256 = "1mzkip6621111xwwksqjad1kgpbhna4dhpkf6cnj2r18dkk2jmcw";
+      name = "VSCode_${version}_${plat}.${archive_fmt}";
+      url = "https://vscode-update.azurewebsites.net/${version}/${plat}/${channel}";
+      inherit sha256;
     };
 
-    buildInputs = [ makeWrapper jq xlibs.libX11 xlibs.xproto gtk python nodejs electron ];
+    desktopItem = makeDesktopItem {
+      name = "code";
+      exec = "code";
+      icon = "code";
+      comment = "Code editor redefined and optimized for building and debugging modern web and cloud applications";
+      desktopName = "Visual Studio Code";
+      genericName = "Text Editor";
+      categories = "GNOME;GTK;Utility;TextEditor;Development;";
+    };
 
-    extensionGalleryJSON = ''
-      {
-        \"extensionsGallery\": {
-          \"serviceUrl\": \"https://marketplace.visualstudio.com/_apis/public/gallery\",
-          \"cacheUrl\": \"https://vscode.blob.core.windows.net/gallery/index\",
-          \"itemUrl\": \"https://marketplace.visualstudio.com/items\"
-        }
-      }
-    '';
+    buildInputs = if stdenv.system == "x86_64-darwin"
+      then [ unzip makeWrapper libXScrnSaver libsecret ]
+      else [ makeWrapper libXScrnSaver libxkbfile libsecret ];
 
-    configurePhase = ''
-      # PATCH SCRIPT SHEBANGS
-      echo "PATCH SCRIPT SHEBANGS"
-      patchShebangs ./scripts
+    installPhase =
+      if stdenv.system == "x86_64-darwin" then ''
+        mkdir -p $out/lib/vscode $out/bin
+        cp -r ./* $out/lib/vscode
+        ln -s $out/lib/vscode/Contents/Resources/app/bin/code $out/bin
+      '' else ''
+        mkdir -p $out/lib/vscode $out/bin
+        cp -r ./* $out/lib/vscode
 
-      # ADD EXTENSION GALLERY URLS TO APPLICATION CONFIGURATION
-      echo "AUGMENT APPLICATION CONFIGURATION"
-      echo "$(cat ./product.json) ${extensionGalleryJSON}" | jq -s add  > tmpFile && \
-        mv tmpFile ./product.json
-    '';
+        substituteInPlace $out/lib/vscode/bin/code --replace '"$CLI" "$@"' '"$CLI" "--skip-getting-started" "$@"'
 
-    buildPhase  = ''
-      # BUILD COMPILE- & RUN-TIME DEPENDENCIES
-      echo "BUILD COMPILE- & RUN-TIME DEPENDENCIES"
-      mkdir -p ./tmp
-      HOME=./tmp ./scripts/npm.sh install
+        ln -s $out/lib/vscode/bin/code $out/bin
 
-      # COMPILE SOURCES
-      echo "COMPILE SOURCES"
-      ./node_modules/.bin/gulp
-    '';
+        mkdir -p $out/share/applications
+        cp $desktopItem/share/applications/* $out/share/applications
 
-    doCheck = true;
-    checkPhase = ''
-      # CHECK APPLICATION
-      echo "CHECK APPLICATION"
-      ATOM_SHELL_INTERNAL_RUN_AS_NODE=1 ${electron}/bin/electron ./node_modules/.bin/_mocha
-    '';
+        mkdir -p $out/share/pixmaps
+        cp $out/lib/vscode/resources/app/resources/linux/code.png $out/share/pixmaps/code.png
+      '';
 
-    installPhase = ''
-      # PRUNE COMPILE-TIME DEPENDENCIES
-      echo "PRUNE COMPILE-TIME DEPENDENCIES"
-      npm prune --production
+    postFixup = lib.optionalString (stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux") ''
+      patchelf \
+        --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+        --set-rpath "${rpath}" \
+        $out/lib/vscode/code
 
-      # COPY FILES NEEDED FOR RUNNING APPLICATION TO OUT DIRECTORY
-      echo "COPY FILES NEEDED FOR RUNNING APPLICATION TO OUT DIRECTORY"
-      mkdir -p "$out"
-      cp -R ./.vscode "$out"/.vscode
-      cp -R ./extensions "$out"/extensions
-      cp -R ./out "$out"/out
-      cp -R ./node_modules "$out"/node_modules
-      cp ./package.json "$out"/package.json
-      cp ./product.json "$out"/product.json
-      cp ./tslint.json "$out"/tslint.json
-      # COPY LEGAL STUFF
-      cp ./LICENSE.txt "$out"/LICENSE.txt
-      cp ./OSSREADME.json "$out"/OSSREADME.json
-      cp ./ThirdPartyNotices.txt "$out"/ThirdPartyNotices.txt
+      patchelf \
+        --set-rpath "${rpath}" \
+        $out/lib/vscode/resources/app/node_modules/keytar/build/Release/keytar.node
 
-      # CREATE RUNNER SCRIPT
-      echo "CREATE RUNNER SCRIPT"
-      mkdir -p "$out"/bin
-      makeWrapper "${electron}/bin/electron" "$out/bin/vscode" \
-      --set VSCODE_DEV 1 \
-      --add-flags "$out"
+      ln -s ${lib.makeLibraryPath [libsecret]}/libsecret-1.so.0 $out/lib/vscode/libsecret-1.so.0
     '';
 
     meta = with stdenv.lib; {
-      description = "Visual Studio Code is an open source source code editor developed by Microsoft for Windows, Linux and OS X.";
+      description = ''
+        Open source source code editor developed by Microsoft for Windows,
+        Linux and macOS
+      '';
       longDescription = ''
-        Visual Studio Code is an open source source code editor developed by Microsoft for Windows, Linux and OS X.
-        It includes support for debugging, embedded Git control, syntax highlighting, intelligent code completion, snippets, and code refactoring.
-        It is also customizable, so users can change the editor's theme, keyboard shortcuts, and preferences.
+        Open source source code editor developed by Microsoft for Windows,
+        Linux and macOS. It includes support for debugging, embedded Git
+        control, syntax highlighting, intelligent code completion, snippets,
+        and code refactoring. It is also customizable, so users can change the
+        editor's theme, keyboard shortcuts, and preferences
       '';
       homepage = http://code.visualstudio.com/;
-      license = licenses.mit;
-      platforms = [ "x86_64-linux" ];
+      downloadPage = https://code.visualstudio.com/Updates;
+      license = licenses.unfree;
+      platforms = [ "i686-linux" "x86_64-linux" "x86_64-darwin" ];
     };
   }

@@ -1,82 +1,87 @@
-{ stdenv, fetchFromGitHub, octoprint, pythonPackages }:
+{ stdenv, fetchFromGitHub, fetchpatch, octoprint, pythonPackages }:
 
 let
   buildPlugin = args: pythonPackages.buildPythonApplication (args // {
     buildInputs = (args.buildInputs or []) ++ [ octoprint ];
   });
-in {
 
-  m3d-fio = buildPlugin rec {
-    name = "M3D-Fio-${version}";
-    version = "0.30.2";
+  self = {
 
-    src = fetchFromGitHub {
-      owner = "donovan6000";
-      repo = "M3D-Fio";
-      rev = "V${version}";
-      sha256 = "1knm41hwjf6v4yjx8khr2zd9ryndmw8bkp3y80hgjc5p4nqxrmg3";
+    # Deprecated alias
+    m3d-fio = self.m33-fio; # added 2016-08-13
+
+    m33-fio = buildPlugin rec {
+      name = "M33-Fio-${version}";
+      version = "1.21";
+
+      src = fetchFromGitHub {
+        owner = "donovan6000";
+        repo = "M33-Fio";
+        rev = "V${version}";
+        sha256 = "1la3611kkqn8yiwjn6cizc45ri8pnk6ckld1na4nk6mqk88jvjq7";
+      };
+
+      patches = [
+        ./m33-fio-one-library.patch
+      ];
+
+      postPatch = ''
+        rm -rf octoprint_m33fio/static/libraries/*
+        (
+          cd 'shared library source'
+          make
+        )
+      '';
+
+      meta = with stdenv.lib; {
+        homepage = https://github.com/donovan6000/M33-Fio;
+        description = "OctoPrint plugin for the Micro 3D printer";
+        platforms = platforms.all;
+        license = licenses.gpl3;
+        maintainers = with maintainers; [ abbradar ];
+      };
     };
 
-    patches = [
-      ./0001-Don-t-use-static-library.patch
-    ];
+    titlestatus = buildPlugin rec {
+      name = "OctoPrint-TitleStatus-${version}";
+      version = "0.0.4";
 
-    postInstall = ''
-    (
-      cd 'shared library source'
-      make
-      install -Dm755 libpreprocessor.so $out/lib/libpreprocessor.so
-    )
-    rm -rf $out/${pythonPackages.python.sitePackages}/octoprint_m3dfio/static/libraries
-    '';
+      src = fetchFromGitHub {
+        owner = "MoonshineSG";
+        repo = "OctoPrint-TitleStatus";
+        rev = version;
+        sha256 = "1l78xrabn5hcly2mgxwi17nwgnp2s6jxi9iy4wnw8k8icv74ag7k";
+      };
 
-    meta = with stdenv.lib; {
-      homepage = https://github.com/donovan6000/M3D-Fio;
-      description = " OctoPrint plugin for the Micro 3D printer";
-      platforms = platforms.all;
-      license = licenses.gpl3;
-      maintainers = with maintainers; [ abbradar ];
+      meta = with stdenv.lib; {
+        homepage = https://github.com/MoonshineSG/OctoPrint-TitleStatus;
+        description = "Show printers status in window title";
+        platforms = platforms.all;
+        license = licenses.agpl3;
+        maintainers = with maintainers; [ abbradar ];
+      };
     };
+
+    stlviewer = buildPlugin rec {
+      name = "OctoPrint-STLViewer-${version}";
+      version = "0.4.1";
+
+      src = fetchFromGitHub {
+        owner = "jneilliii";
+        repo = "OctoPrint-STLViewer";
+        rev = "v${version}";
+        sha256 = "1f64s37g2d79g76v0vjnjrc2jp2gwrsnfgx7w3n0hkf1lz1pjkm0";
+      };
+
+      meta = with stdenv.lib; {
+        homepage = https://github.com/jneilliii/Octoprint-STLViewer;
+        description = "A simple stl viewer tab for OctoPrint";
+        platforms = platforms.all;
+        license = licenses.agpl3;
+        maintainers = with maintainers; [ abbradar ];
+      };
+    };
+
   };
 
-  titlestatus = buildPlugin rec {
-    name = "OctoPrint-TitleStatus-${version}";
-    version = "0.0.4";
-
-    src = fetchFromGitHub {
-      owner = "MoonshineSG";
-      repo = "OctoPrint-TitleStatus";
-      rev = version;
-      sha256 = "1l78xrabn5hcly2mgxwi17nwgnp2s6jxi9iy4wnw8k8icv74ag7k";
-    };
-
-    meta = with stdenv.lib; {
-      homepage = https://github.com/MoonshineSG/OctoPrint-TitleStatus;
-      description = "Show printers status in window title";
-      platforms = platforms.all;
-      license = licenses.agpl3;
-      maintainers = with maintainers; [ abbradar ];
-    };
-  };
-
-  stlviewer = buildPlugin rec {
-    name = "OctoPrint-STLViewer-${version}";
-    version = "0.3.0";
-
-    src = fetchFromGitHub {
-      owner = "jneilliii";
-      repo = "OctoPrint-STLViewer";
-      rev = "v${version}";
-      sha256 = "1a6sa8pw9ay7x27pfwr3nzb22x3jaw0c9vwyz4mrj76zkiw6svfi";
-    };
-
-    meta = with stdenv.lib; {
-      homepage = https://github.com/jneilliii/Octoprint-STLViewer;
-      description = "A simple stl viewer tab for OctoPrint";
-      platforms = platforms.all;
-      license = licenses.agpl3;
-      maintainers = with maintainers; [ abbradar ];
-    };
-  };
-
-}
+in self

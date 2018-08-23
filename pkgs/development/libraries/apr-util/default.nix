@@ -13,23 +13,23 @@ assert ldapSupport -> openldap != null;
 with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  name = "apr-util-1.5.4";
+  name = "apr-util-1.6.1";
 
   src = fetchurl {
     url = "mirror://apache/apr/${name}.tar.bz2";
-    sha256 = "0bn81pfscy9yjvbmyx442svf43s6dhrdfcsnkpxz43fai5qk5kx6";
+    sha256 = "0nq3s1yn13vplgl6qfm09f7n0wm08malff9s59bqf9nid9xjzqfk";
   };
 
   patches = optional stdenv.isFreeBSD ./include-static-dependencies.patch;
 
-  outputs = [ "dev" "out" ];
+  outputs = [ "out" "dev" ];
   outputBin = "dev";
 
   buildInputs = optional stdenv.isFreeBSD autoreconfHook;
 
-  configureFlags = [ "--with-apr=${apr}" "--with-expat=${expat}" ]
+  configureFlags = [ "--with-apr=${apr.dev}" "--with-expat=${expat.dev}" ]
     ++ optional (!stdenv.isCygwin) "--with-crypto"
-    ++ optional sslSupport "--with-openssl=${openssl}"
+    ++ optional sslSupport "--with-openssl=${openssl.dev}"
     ++ optional bdbSupport "--with-berkeley-db=${db}"
     ++ optional ldapSupport "--with-ldap=ldap"
     ++ optionals stdenv.isCygwin
@@ -43,11 +43,14 @@ stdenv.mkDerivation rec {
     ++ optional ldapSupport openldap
     ++ optional stdenv.isFreeBSD cyrus_sasl;
 
-  # Give apr1 access to sed for runtime invocations
   postInstall = ''
     for f in $out/lib/*.la $out/lib/apr-util-1/*.la; do
-      substituteInPlace $f --replace "${expat.dev}/lib" "${expat.out}/lib"
+      substituteInPlace $f \
+        --replace "${expat.dev}/lib" "${expat.out}/lib" \
+        --replace "${openssl.dev}/lib" "${openssl.out}/lib"
     done
+
+    # Give apr1 access to sed for runtime invocations.
     wrapProgram $dev/bin/apu-1-config --prefix PATH : "${gnused}/bin"
   '';
 
@@ -61,5 +64,6 @@ stdenv.mkDerivation rec {
     homepage = http://apr.apache.org/;
     description = "A companion library to APR, the Apache Portable Runtime";
     maintainers = [ stdenv.lib.maintainers.eelco ];
+    platforms = stdenv.lib.platforms.unix;
   };
 }

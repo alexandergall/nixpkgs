@@ -1,164 +1,131 @@
-{ stdenv, lib, fetchFromGitHub, fetchgit, qtbase, qtimageformats
-, breakpad, ffmpeg, openalSoft, openssl, zlib, libexif, lzma, libopus
-, gtk2, glib, cairo, pango, gdk_pixbuf, atk, libappindicator-gtk2
-, libunity, dee, libdbusmenu-glib, libva
-
-, pkgconfig, libxcb, xcbutilwm, xcbutilimage, xcbutilkeysyms
-, libxkbcommon, libpng, libjpeg, freetype, harfbuzz, pcre16
-, xproto, libX11, inputproto, sqlite, dbus
+{ mkDerivation, lib, fetchgit, fetchpatch
+, pkgconfig, gyp, cmake, makeWrapper
+, qtbase, qtimageformats, gtk3, libappindicator-gtk3, libnotify
+, dee, ffmpeg, openalSoft, minizip, libopus, alsaLib, libpulseaudio, range-v3
 }:
 
-let
-  system-x86_64 = lib.elem stdenv.system lib.platforms.x86_64;
-in stdenv.mkDerivation rec {
+mkDerivation rec {
   name = "telegram-desktop-${version}";
-  version = "0.9.33";
-  qtVersion = lib.replaceStrings ["."] ["_"] qtbase.version;
+  version = "1.2.6";
 
-  src = fetchFromGitHub {
-    owner = "telegramdesktop";
-    repo = "tdesktop";
+  # Submodules
+  src = fetchgit {
+    url = "git://github.com/telegramdesktop/tdesktop";
     rev = "v${version}";
-    sha256 = "020vwm7h22951v9zh457d82qy5ifp746vwishkvb16h1vwr1qx4s";
+    sha256 = "15g0m2wwqfp13wd7j31p8cx1kpylx5m8ljaksnsqdkgyr9l1ar8w";
+    fetchSubmodules = true;
   };
 
+  # TODO: Not active anymore.
   tgaur = fetchgit {
-    url = "https://aur.archlinux.org/telegram-desktop.git";
-    rev = "df47a864282959b103a08b65844e9088e012fdb3";
-    sha256 = "1v1dbi8yiaf2hgghniykm5qbnda456xj3zfjnbqysn41f5cn40h4";
+    url = "https://aur.archlinux.org/telegram-desktop-systemqt.git";
+    rev = "1ed27ce40913b9e6e87faf7a2310660c2790b98e";
+    sha256 = "1i7ipqgisaw54g1nbg2cvpbx89g9gyjjb3sak1486pxsasp1qhyc";
   };
 
-  buildInputs = [
-    breakpad ffmpeg openalSoft openssl zlib libexif lzma libopus
-    gtk2 glib libappindicator-gtk2 libunity cairo pango gdk_pixbuf atk
-    dee libdbusmenu-glib libva
-    # Qt dependencies
-    libxcb xcbutilwm xcbutilimage xcbutilkeysyms libxkbcommon
-    libpng libjpeg freetype harfbuzz pcre16 xproto libX11
-    inputproto sqlite dbus
+  patches = [
+    (fetchpatch {
+      name = "tdesktop.patch";
+      url = "https://git.archlinux.org/svntogit/community.git/plain/repos/community-x86_64/tdesktop.patch?h=packages/telegram-desktop&id=f0eefac36f529295f8b065a14b6d5f1a51d7614d";
+      sha256 = "1a4wap5xnp6zn4913r3zdpy6hvkcfxcy4zzimy7fwzp7iwy20iqa";
+    })
   ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  postPatch = ''
+    substituteInPlace Telegram/SourceFiles/platform/linux/linux_libs.cpp --replace '"appindicator"' '"${libappindicator-gtk3}/lib/libappindicator3.so"'
+    substituteInPlace Telegram/SourceFiles/platform/linux/linux_libnotify.cpp --replace '"notify"' '"${libnotify}/lib/libnotify.so"'
+  '';
+
+  nativeBuildInputs = [ pkgconfig gyp cmake makeWrapper ];
+
+  buildInputs = [
+    qtbase qtimageformats gtk3 libappindicator-gtk3
+    dee ffmpeg openalSoft minizip libopus alsaLib libpulseaudio range-v3
+  ];
 
   enableParallelBuilding = true;
 
-  qmakeFlags = [
-    "CONFIG+=release"
-    "DEFINES+=TDESKTOP_DISABLE_AUTOUPDATE"
-    "DEFINES+=TDESKTOP_DISABLE_REGISTER_CUSTOM_SCHEME"
-    "INCLUDEPATH+=${gtk2}/include/gtk-2.0"
-    "INCLUDEPATH+=${glib}/include/glib-2.0"
-    "INCLUDEPATH+=${glib}/lib/glib-2.0/include"
-    "INCLUDEPATH+=${cairo}/include/cairo"
-    "INCLUDEPATH+=${pango}/include/pango-1.0"
-    "INCLUDEPATH+=${gtk2}/lib/gtk-2.0/include"
-    "INCLUDEPATH+=${gdk_pixbuf}/include/gdk-pixbuf-2.0"
-    "INCLUDEPATH+=${atk}/include/atk-1.0"
-    "INCLUDEPATH+=${libappindicator-gtk2}/include/libappindicator-0.1"
-    "INCLUDEPATH+=${libunity}/include/unity"
-    "INCLUDEPATH+=${dee}/include/dee-1.0"
-    "INCLUDEPATH+=${libdbusmenu-glib}/include/libdbusmenu-glib-0.4"
-    "INCLUDEPATH+=${breakpad}/include/breakpad"
-    "LIBS+=-lcrypto"
-    "LIBS+=-lssl"
-    "LIBS+=-lz"
-    "LIBS+=-lgobject-2.0"
-    "LIBS+=-lxkbcommon"
-    "LIBS+=-lX11"
-    "LIBS+=${breakpad}/lib/libbreakpad_client.a"
-    "LIBS+=./../../../Libraries/QtStatic/qtbase/plugins/platforms/libqxcb.a"
-    "LIBS+=./../../../Libraries/QtStatic/qtimageformats/plugins/imageformats/libqwebp.a"
+  GYP_DEFINES = lib.concatStringsSep "," [
+    "TDESKTOP_DISABLE_CRASH_REPORTS"
+    "TDESKTOP_DISABLE_AUTOUPDATE"
+    "TDESKTOP_DISABLE_REGISTER_CUSTOM_SCHEME"
   ];
 
-  qtSrcs = qtbase.srcs ++ [ qtimageformats.src ];
-  qtPatches = qtbase.patches;
+  NIX_CFLAGS_COMPILE = [
+    "-DTDESKTOP_DISABLE_AUTOUPDATE"
+    "-DTDESKTOP_DISABLE_CRASH_REPORTS"
+    "-DTDESKTOP_DISABLE_REGISTER_CUSTOM_SCHEME"
+    "-I${minizip}/include/minizip"
+    # See Telegram/gyp/qt.gypi
+    "-I${qtbase.dev}/mkspecs/linux-g++"
+  ] ++ lib.concatMap (x: [
+    "-I${qtbase.dev}/include/${x}"
+    "-I${qtbase.dev}/include/${x}/${qtbase.version}"
+    "-I${qtbase.dev}/include/${x}/${qtbase.version}/${x}"
+    "-I${libopus.dev}/include/opus"
+    "-I${alsaLib.dev}/include/alsa"
+    "-I${libpulseaudio.dev}/include/pulse"
+  ]) [ "QtCore" "QtGui" "QtDBus" ];
+  CPPFLAGS = NIX_CFLAGS_COMPILE;
 
-  buildCommand = ''
-    # We don't use nativeBuildInputs to avoid adding system Qt 5 libraries to various paths.
-    export PATH="${qtbase}/bin:$PATH"
+  preConfigure = ''
 
-    unpackPhase
-    cd "$sourceRoot"
-    patchPhase
-    sed -i 'Telegram/Telegram.pro' \
-      -e 's/CUSTOM_API_ID//g' \
+    pushd "Telegram/ThirdParty/libtgvoip"
+    patch -Np1 -i "${tgaur}/libtgvoip.patch"
+    popd
+
+    sed -i Telegram/gyp/telegram_linux.gypi \
       -e 's,/usr,/does-not-exist,g' \
-      -e '/LIBS += .*libxkbcommon.a/d' \
-      -e '/LIBS += .*libz.a/d' \
-      -e '/LIBS += .*libbreakpad_client.a/d' \
-      -e 's,-flto ,,g'
-    echo "Q_IMPORT_PLUGIN(QXcbIntegrationPlugin)" >> Telegram/SourceFiles/stdafx.cpp
+      -e 's,appindicator-0.1,appindicator3-0.1,g' \
+      -e 's,-flto,,g'
 
-    ( mkdir -p ../Libraries
-      cd ../Libraries
-      for i in $qtSrcs; do
-        tar -xaf $i
-      done
-      mv qt-everywhere-opensource-src-* QtStatic
-      mv qtbase-opensource-src-* ./QtStatic/qtbase
-      mv qtimageformats-opensource-src-* ./QtStatic/qtimageformats
-      cd QtStatic/qtbase
-      patch -p1 < ../../../$sourceRoot/Telegram/_qtbase_${qtVersion}_patch.diff
-      cd ..
-      for i in $qtPatches; do
-        patch -p1 < $i
-      done
-      ${qtbase.postPatch}
+    sed -i Telegram/gyp/qt.gypi \
+      -e "s,/usr/include/qt/QtCore/,${qtbase.dev}/include/QtCore/,g" \
+      -e 's,\d+",\d+" | head -n1,g'
+    sed -i Telegram/gyp/qt_moc.gypi \
+      -e "s,/usr/bin/moc,moc,g"
+    sed -i Telegram/gyp/qt_rcc.gypi \
+      -e "s,/usr/bin/rcc,rcc,g"
 
-      export configureFlags="-prefix "../../qt" -release -opensource -confirm-license -system-zlib \
-        -system-libpng -system-libjpeg -system-freetype -system-harfbuzz -system-pcre -system-xcb \
-        -system-xkbcommon-x11 -no-opengl -static -nomake examples -nomake tests \
-        -openssl-linked -dbus-linked -system-sqlite -verbose \
-        ${lib.optionalString (!system-x86_64) "-no-sse2"} -no-sse3 -no-ssse3 \
-        -no-sse4.1 -no-sse4.2 -no-avx -no-avx2 -no-mips_dsp -no-mips_dspr2"
-      export dontAddPrefix=1
-      export buildFlags="module-qtbase module-qtimageformats"
-      export installFlags="module-qtbase-install_subtargets module-qtimageformats-install_subtargets"
+    gyp \
+      -Dbuild_defines=${GYP_DEFINES} \
+      -Gconfig=Release \
+      --depth=Telegram/gyp \
+      --generator-output=../.. \
+      -Goutput_dir=out \
+       --format=cmake \
+      Telegram/gyp/Telegram.gyp
 
-      ( export MAKEFLAGS=-j$NIX_BUILD_CORES
-        configurePhase
-      )
-      buildPhase
-      installPhase
-    )
+    cd out/Release
 
-    ( mkdir -p Linux/DebugIntermediateStyle
-      cd Linux/DebugIntermediateStyle
-      qmake CONFIG+=debug ../../Telegram/MetaStyle.pro
-      buildPhase
-    )
-    ( mkdir -p Linux/DebugIntermediateLang
-      cd Linux/DebugIntermediateLang
-      qmake CONFIG+=debug ../../Telegram/MetaLang.pro
-      buildPhase
-    )
+    NUM=$((`wc -l < CMakeLists.txt` - 2))
+    sed -i "$NUM r $tgaur/CMakeLists.inj" CMakeLists.txt
 
-    ( mkdir -p Linux/ReleaseIntermediate
-      cd Linux/ReleaseIntermediate
-      qmake $qmakeFlags ../../Telegram/Telegram.pro
-      pattern="^PRE_TARGETDEPS +="
-      grep "$pattern" "../../Telegram/Telegram.pro" | sed "s/$pattern//g" | xargs make
-
-      qmake $qmakeFlags ../../Telegram/Telegram.pro
-      buildPhase
-    )
-
-    install -Dm755 Linux/Release/Telegram $out/bin/telegram-desktop
-    mkdir -p $out/share/applications $out/share/kde4/services
-    sed "s,/usr/bin,$out/bin,g" $tgaur/telegramdesktop.desktop > $out/share/applications/telegramdesktop.desktop
-    sed "s,/usr/bin,$out/bin,g" $tgaur/tg.protocol > $out/share/kde4/services/tg.protocol
-    for icon_size in 16 32 48 64 128 256 512; do
-      install -Dm644 "Telegram/SourceFiles/art/icon''${icon_size}.png" "$out/share/icons/hicolor/''${icon_size}x''${icon_size}/apps/telegram-desktop.png"
-    done
-
-    fixupPhase
+    export ASM=$(type -p gcc)
   '';
 
-  meta = with stdenv.lib; {
+  installPhase = ''
+    install -Dm755 Telegram $out/bin/telegram-desktop
+    mkdir -p $out/share/applications $out/share/kde4/services
+    sed "s,/usr/bin,$out/bin,g" $tgaur/telegram-desktop.desktop > $out/share/applications/telegram-desktop.desktop
+    sed "s,/usr/bin,$out/bin,g" $tgaur/tg.protocol > $out/share/kde4/services/tg.protocol
+    for icon_size in 16 32 48 64 128 256 512; do
+      install -Dm644 "../../../Telegram/Resources/art/icon''${icon_size}.png" "$out/share/icons/hicolor/''${icon_size}x''${icon_size}/apps/telegram-desktop.png"
+    done
+
+    # This is necessary to run Telegram in a pure environment.
+    wrapProgram $out/bin/telegram-desktop \
+      --prefix QT_PLUGIN_PATH : "${qtbase}/${qtbase.qtPluginPrefix}" \
+      --set XDG_RUNTIME_DIR "XDG-RUNTIME-DIR"
+    sed -i $out/bin/telegram-desktop \
+      -e "s,'XDG-RUNTIME-DIR',\"\''${XDG_RUNTIME_DIR:-/run/user/\$(id --user)}\","
+  '';
+
+  meta = with lib; {
     description = "Telegram Desktop messaging app";
     license = licenses.gpl3;
     platforms = platforms.linux;
-    homepage = "https://desktop.telegram.org/";
-    maintainers = with maintainers; [ abbradar ];
+    homepage = https://desktop.telegram.org/;
+    maintainers = with maintainers; [ abbradar garbas primeos ];
   };
 }

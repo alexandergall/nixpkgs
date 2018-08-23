@@ -7,16 +7,15 @@ let
     else if stdenv.system == "x86_64-darwin" then "bandwidth-mac64"
     else if stdenv.system == "i686-darwin" then "bandwidth-mac32"
     else if stdenv.system == "i686-cygwin" then "bandwidth-win32"
-    else null;
+    else throw "Unknown architecture";
 in
 stdenv.mkDerivation rec {
   name = "bandwidth-${version}";
-  version = "1.2.0";
+  version = "1.5.1";
 
   src = fetchurl {
-    url = "https://mutineer.org/file.php?id=ee10698c6a675ece26f08ddb5e6001323d6305c1&p=bandwidth";
-    name = "${name}.tar.gz";
-    sha256 = "1jq6a4n77gcx68bkr8l79agsmgv8saw9nv183297gnah1g67nvw6";
+    url = "http://zsmith.co/archives/${name}.tar.gz";
+    sha256 = "1v9k1a2ilkbhc3viyacgq88c9if60kwsd1fy6rn84317qap4i7ib";
   };
 
   buildInputs = [ nasm ];
@@ -35,6 +34,6 @@ stdenv.mkDerivation rec {
     description = "Artificial benchmark for identifying weaknesses in the memory subsystem";
     license = licenses.mit;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ nckx wkennington ];
+    maintainers = with maintainers; [ wkennington ];
   };
 }

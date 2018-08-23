@@ -8,8 +8,7 @@ let patch = (callPackage ./sources.nix {}).staging;
 in assert (builtins.parseDrvName wineUnstable.name).version == patch.version;
 
 stdenv.lib.overrideDerivation wineUnstable (self: {
-  nativeBuildInputs = build-inputs [ libtxc_dxtn_Name ] self.nativeBuildInputs; 
-  buildInputs = build-inputs [ "perl" "utillinux" "autoconf" ] self.buildInputs;
+  buildInputs = build-inputs [ "perl" "utillinux" "autoconf" libtxc_dxtn_Name ] self.buildInputs;
 
   name = "${self.name}-staging";
 
@@ -19,7 +18,7 @@ stdenv.lib.overrideDerivation wineUnstable (self: {
     chmod +w patches
     cd patches
     patchShebangs gitapply.sh
-    ./patchinstall.sh DESTDIR="$TMP/$sourceRoot" --all
+    ./patchinstall.sh DESTDIR="$PWD/.." --all
     cd ..
   '';
 })

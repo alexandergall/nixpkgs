@@ -5,14 +5,17 @@
 with stdenv.lib;
 stdenv.mkDerivation rec {
   name = "openssl-chacha-${version}";
-  version = "2016-01-27";
+  version = "2016-08-22";
 
   src = fetchFromGitHub {
     owner = "PeterMosmans";
     repo = "openssl";
-    rev = "4576ede5b08242bcd6749fc284c691ed177842b7";
-    sha256 = "1030rs4bdaysxbq0mmck1dn6g5adspzkwsrnhvv16b4ig0r4ncgj";
+    rev = "293717318e903b95f4d7e83a98a087282f37efc3";
+    sha256 = "134j3anjnj2q99xsd8d47bwvjp73qkdsimdd9riyjxa3hd8ysr00";
   };
+
+  outputs = [ "bin" "dev" "out" "man" ];
+  setOutputFlags = false;
 
   nativeBuildInputs = [ perl zlib ];
   buildInputs = stdenv.lib.optional withCryptodev cryptodevHeaders;
@@ -35,7 +38,7 @@ stdenv.mkDerivation rec {
   ];
 
   makeFlags = [
-    "MANDIR=$(out)/share/man"
+    "MANDIR=$(man)/share/man"
   ];
 
   # Parallel building is broken in OpenSSL.
@@ -48,8 +51,16 @@ stdenv.mkDerivation rec {
         rm "$out/lib/"*.a
     fi
 
+    mkdir -p $bin
+    mv $out/bin $bin/
+
+    mkdir $dev
+    mv $out/include $dev/
+
     # remove dependency on Perl at runtime
-    rm -r $out/etc/ssl/misc $out/bin/c_rehash
+    rm -r $out/etc/ssl/misc
+
+    rmdir $out/etc/ssl/{certs,private}
   '';
 
   postFixup = ''
@@ -61,7 +72,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = http://www.openssl.org/;
+    homepage = https://www.openssl.org/;
     description = "A cryptographic library that implements the SSL and TLS protocols";
     platforms = [ "x86_64-linux" ];
     maintainers = [ stdenv.lib.maintainers.cstrahan ];

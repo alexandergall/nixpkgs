@@ -15,6 +15,8 @@ stdenv.mkDerivation rec {
     sha256 = "0s7mxq2cgzwjfsq0vhpz6ljk7wr725nxg48128iyirf85585l691";
   };
 
+  postPatch = "sed '1i#include \"x86intrin.h\"' -i common/src/x86emitter/cpudetect.cpp";
+
   configurePhase = ''
     mkdir -p build
     cd build
@@ -24,13 +26,14 @@ stdenv.mkDerivation rec {
       -DCMAKE_BUILD_PO=TRUE \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$out" \
+      -DDISABLE_ADVANCE_SIMD=TRUE \
       -DDISABLE_PCSX2_WRAPPER=TRUE \
       -DDOC_DIR="$out/share/doc/pcsx2" \
       -DGAMEINDEX_DIR="$out/share/pcsx2" \
       -DGLSL_SHADER_DIR="$out/share/pcsx2" \
-      -DGTK2_GLIBCONFIG_INCLUDE_DIR='${glib}/lib/glib-2.0/include' \
-      -DGTK2_GDKCONFIG_INCLUDE_DIR='${gtk2}/lib/gtk-2.0/include' \
-      -DGTK2_INCLUDE_DIRS='${gtk2}/include/gtk-2.0' \
+      -DGTK2_GLIBCONFIG_INCLUDE_DIR='${glib.out}/lib/glib-2.0/include' \
+      -DGTK2_GDKCONFIG_INCLUDE_DIR='${gtk2.out}/lib/gtk-2.0/include' \
+      -DGTK2_INCLUDE_DIRS='${gtk2.dev}/include/gtk-2.0' \
       -DPACKAGE_MODE=TRUE \
       -DPLUGIN_DIR="$out/lib/pcsx2" \
       -DREBUILD_SHADER=TRUE \
@@ -48,6 +51,8 @@ stdenv.mkDerivation rec {
     alsaLib glib gettext gtk2 libaio libpng makeWrapper portaudio SDL2
     soundtouch wxGTK30 zlib
   ];
+
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "Playstation 2 emulator";

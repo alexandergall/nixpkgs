@@ -2,14 +2,13 @@
 
 let
   eMailSrc = fetchFromGitHub {
-    #awaiting acceptance of https://github.com/deanproxy/eMail/pull/29
-    owner = "jerith666";
+    owner = "deanproxy";
     repo = "eMail";
-    rev = "d9fd259f952b573d320916ee34e807dd3dd24b1f";
-    sha256 = "0q4ly4bhlv6lrlj5kmjs491aah1afmkjyw63i9yqnz4d2k6npvl9";
+    rev = "7d23c8f508a52bd8809e2af4290417829b6bb5ae";
+    sha256 = "1cxxzhm36civ6vjdgrk7mfmlzkih44kdii6l2xgy4r434s8rzcpn";
   };
 
-  srcRoot = "eMail-${eMailSrc.rev}-src";
+  srcRoot = eMailSrc.name;
 
   dlibSrc = fetchFromGitHub {
     owner = "deanproxy";
@@ -35,6 +34,7 @@ stdenv.mkDerivation {
   meta = {
     description = "Command line SMTP client";
     license = with lib.licenses; [ gpl2 ];
-    homepage = http://deanproxy.com/code;
+    homepage = https://deanproxy.com/code;
+    platforms = stdenv.lib.platforms.unix;
   };
 }

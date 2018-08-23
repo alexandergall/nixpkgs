@@ -46,14 +46,19 @@ patchShebangs() {
             args="$arg0 $args"
         fi
 
-        newInterpreterLine="$newPath $args"
+        # Strip trailing whitespace introduced when no arguments are present
+        newInterpreterLine="$(echo "$newPath $args" | sed 's/[[:space:]]*$//')"
 
         if [ -n "$oldPath" -a "${oldPath:0:${#NIX_STORE}}" != "$NIX_STORE" ]; then
             if [ -n "$newPath" -a "$newPath" != "$oldPath" ]; then
                 echo "$f: interpreter directive changed from \"$oldInterpreterLine\" to \"$newInterpreterLine\""
                 # escape the escape chars so that sed doesn't interpret them
                 escapedInterpreterLine=$(echo "$newInterpreterLine" | sed 's|\\|\\\\|g')
+                # Preserve times, see: https://github.com/NixOS/nixpkgs/pull/33281
+                touch -r "$f" "$f.timestamp"
                 sed -i -e "1 s|.*|#\!$escapedInterpreterLine|" "$f"
+                touch -r "$f.timestamp" "$f"
+                rm "$f.timestamp"
             fi
         fi
     done

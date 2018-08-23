@@ -1,12 +1,14 @@
-{ stdenv, fetchurl, perl, cmake, flex, bison, libminc }:
+{ stdenv, fetchFromGitHub, perl, cmake, flex, bison, libminc }:
 
 stdenv.mkDerivation rec {
-  _name = "minc-tools";
-  name  = "${_name}-2.3.00";
+  name = "${pname}-2.3.00";
+  pname = "minc-tools";
 
-  src = fetchurl {
-    url = "https://github.com/BIC-MNI/${_name}/archive/${_name}-2-3-00.tar.gz";
-    sha256 = "1d457vrwy2fl6ga2axnwn1cchkx2rmgixfzyb1zjxb06cxkfj1dm";
+  src = fetchFromGitHub {
+    owner = "BIC-MNI";
+    repo = pname;
+    rev = builtins.replaceStrings [ "." ] [ "-" ] name;
+    sha256 = "0px5paprx4ds9aln3jdg1pywszgyz2aykgkdbj1y8gc1lwcizsl9";
   };
 
   nativeBuildInputs = [ cmake flex bison ] ++ (if doCheck then [ perl ] else [ ]);
@@ -15,7 +17,9 @@ stdenv.mkDerivation rec {
   cmakeFlags = [ "-DLIBMINC_DIR=${libminc}/lib/" ];
 
   checkPhase = "ctest";
-  doCheck = true;
+  doCheck = false;
+
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     homepage = https://github.com/BIC-MNI/minc-tools;

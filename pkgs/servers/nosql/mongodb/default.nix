@@ -1,5 +1,5 @@
-{ stdenv, fetchurl, fetchpatch, scons, boost, gperftools, pcre, snappy
-, zlib, libyamlcpp, sasl, openssl, libpcap, wiredtiger
+{ stdenv, fetchurl, fetchpatch, scons, boost, gperftools, pcre-cpp, snappy
+, zlib, libyamlcpp, sasl, openssl, libpcap, wiredtiger, Security
 }:
 
 # Note:
@@ -7,7 +7,7 @@
 
 with stdenv.lib;
 
-let version = "3.2.1";
+let version = "3.4.10";
     system-libraries = [
       "pcre"
       #"asio" -- XXX use package?
@@ -19,10 +19,11 @@ let version = "3.2.1";
       #"stemmer"  -- not nice to package yet (no versioning, no makefile, no shared libs).
       "yaml"
     ] ++ optionals stdenv.isLinux [ "tcmalloc" ];
+
     buildInputs = [
-      sasl boost gperftools pcre snappy
-      zlib libyamlcpp sasl openssl libpcap
-    ]; # ++ optional stdenv.is64bit wiredtiger;
+      sasl boost gperftools pcre-cpp snappy
+      zlib libyamlcpp sasl openssl.dev openssl.out libpcap
+    ] ++ stdenv.lib.optionals stdenv.isDarwin [ Security ];
 
     other-args = concatStringsSep " " ([
       "--ssl"
@@ -42,19 +43,19 @@ in stdenv.mkDerivation rec {
   name = "mongodb-${version}";
 
   src = fetchurl {
-    url = "http://downloads.mongodb.org/src/mongodb-src-r${version}.tar.gz";
-    sha256 = "059gskly8maj2c9iy46gccx7a9ya522pl5aaxl5vss5bllxilhsh";
+    url = "https://fastdl.mongodb.org/src/mongodb-src-r${version}.tar.gz";
+    sha256 = "1wz2mhl9z0b1bdkg6m8v8mvw9k60mdv5ybq554xn3yjj9z500f24";
   };
 
   nativeBuildInputs = [ scons ];
   inherit buildInputs;
 
-  # When not building with the system valgrind, the build should use the
-  # vendored header file - regardless of whether or not we're using the system
-  # tcmalloc - so we need to lift the include path manipulation out of the
-  # conditional.
   patches =
-    [ ./valgrind-include.patch
+    [
+      # MongoDB keeps track of its build parameters, which tricks nix into
+      # keeping dependencies to build inputs in the final output.
+      # We remove the build flags from buildInfo data.
+      ./forget-build-dependencies.patch
       (fetchpatch {
         url = https://projects.archlinux.org/svntogit/community.git/plain/trunk/boost160.patch?h=packages/mongodb;
         name = "boost160.patch";
@@ -73,7 +74,14 @@ in stdenv.mkDerivation rec {
     substituteInPlace src/third_party/s2/s2cap.cc --replace drem remainder
     substituteInPlace src/third_party/s2/s2latlng.cc --replace drem remainder
     substituteInPlace src/third_party/s2/s2latlngrect.cc --replace drem remainder
+  '' + stdenv.lib.optionalString stdenv.isi686 ''
+
+    # don't fail by default on i686
+    substituteInPlace src/mongo/db/storage/storage_options.h \
+      --replace 'engine("wiredTiger")' 'engine("mmapv1")'
   '';
+
+  NIX_CFLAGS_COMPILE = stdenv.lib.optional stdenv.cc.isClang "-Wno-unused-command-line-argument";
 
   buildPhase = ''
     scons -j $NIX_BUILD_CORES core --release ${other-args}
@@ -86,8 +94,10 @@ in stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
+  hardeningEnable = [ "pie" ];
+
   meta = {
-    description = "a scalable, high-performance, open source NoSQL database";
+    description = "A scalable, high-performance, open source NoSQL database";
     homepage = http://www.mongodb.org;
     license = licenses.agpl3;
 

@@ -1,8 +1,8 @@
 { stdenv, fetchurl, gfortran, readline, ncurses, perl, flex, texinfo, qhull
-, libX11, graphicsmagick, pcre, pkgconfig, mesa, fltk
-, fftw, fftwSinglePrec, zlib, curl, qrupdate, openblas
+, libsndfile, portaudio, libX11, graphicsmagick, pcre, pkgconfig, libGLU_combined, fltk
+, fftw, fftwSinglePrec, zlib, curl, qrupdate, openblas, arpack, libwebp
 , qt ? null, qscintilla ? null, ghostscript ? null, llvm ? null, hdf5 ? null,glpk ? null
-, suitesparse ? null, gnuplot ? null, jdk ? null, python ? null
+, suitesparse ? null, gnuplot ? null, jdk ? null, python ? null, overridePlatforms ? null
 }:
 
 let
@@ -18,16 +18,16 @@ let
 in
 
 stdenv.mkDerivation rec {
-  version = "4.0.1";
+  version = "4.2.1";
   name = "octave-${version}";
   src = fetchurl {
-    url = "mirror://gnu/octave/${name}.tar.xz";
-    sha256 = "11y2w6jgngj4rxiy136mkcs02l52rxk60kapyfc4rgrxz5hli3ym";
+    url = "mirror://gnu/octave/${name}.tar.gz";
+    sha256 = "0frk0nk3aaic8hj3g45h11rnz3arp7pjsq0frbx50sspk1iqzhl0";
   };
 
-  buildInputs = [ gfortran readline ncurses perl flex texinfo qhull libX11
-    graphicsmagick pcre pkgconfig mesa fltk zlib curl openblas
-    fftw fftwSinglePrec qrupdate ]
+  buildInputs = [ gfortran readline ncurses perl flex texinfo qhull
+    graphicsmagick pcre pkgconfig fltk zlib curl openblas libsndfile fftw
+    fftwSinglePrec portaudio qrupdate arpack libwebp ]
     ++ (stdenv.lib.optional (qt != null) qt)
     ++ (stdenv.lib.optional (qscintilla != null) qscintilla)
     ++ (stdenv.lib.optional (ghostscript != null) ghostscript)
@@ -38,9 +38,22 @@ stdenv.mkDerivation rec {
     ++ (stdenv.lib.optional (jdk != null) jdk)
     ++ (stdenv.lib.optional (gnuplot != null) gnuplot)
     ++ (stdenv.lib.optional (python != null) python)
+    ++ (stdenv.lib.optionals (!stdenv.isDarwin) [ libGLU_combined libX11 ])
     ;
 
-  doCheck = true;
+  # makeinfo is required by Octave at runtime to display help
+  prePatch = ''
+    substituteInPlace libinterp/corefcn/help.cc \
+      --replace 'Vmakeinfo_program = "makeinfo"' \
+                'Vmakeinfo_program = "${texinfo}/bin/makeinfo"'
+  ''
+  # REMOVE ON VERSION BUMP
+  # Needed for Octave-4.2.1 on darwin. See https://savannah.gnu.org/bugs/?50234
+  + stdenv.lib.optionalString stdenv.isDarwin ''
+    sed 's/inline file_stat::~file_stat () { }/file_stat::~file_stat () { }/' -i ./liboctave/system/file-stat.cc
+  '';
+
+  doCheck = !stdenv.isDarwin;
 
   enableParallelBuilding = true;
 
@@ -50,7 +63,9 @@ stdenv.mkDerivation rec {
       "--with-blas=openblas"
       "--with-lapack=openblas"
     ]
-    ++ stdenv.lib.optional openblas.blas64 "--enable-64";
+    ++ stdenv.lib.optional openblas.blas64 "--enable-64"
+    ++ stdenv.lib.optionals stdenv.isDarwin ["--with-x=no"]
+    ;
 
   # Keep a copy of the octave tests detailed results in the output
   # derivation, because someone may care
@@ -67,6 +82,8 @@ stdenv.mkDerivation rec {
     homepage = http://octave.org/;
     license = stdenv.lib.licenses.gpl3Plus;
     maintainers = with stdenv.lib.maintainers; [viric raskin];
-    platforms = with stdenv.lib.platforms; linux;
+    platforms = if overridePlatforms == null then
+      (with stdenv.lib.platforms; linux ++ darwin)
+    else overridePlatforms;
   };
 }

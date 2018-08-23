@@ -11,7 +11,8 @@ stdenv.mkDerivation rec{
     sha256 = "0190q2da0ppif2242lahl8xfz01n9sijy60aq1a0545qcp0ilvl8";
   };
 
-  buildInputs = [ pkgconfig cmake libuuid ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ cmake libuuid ];
 
   meta = {
     homepage = http://www.crosswire.org/wiki/BibleSync;
@@ -28,5 +29,6 @@ stdenv.mkDerivation rec{
     '';
     license = licenses.publicDomain;
     maintainers = [ maintainers.AndersonTorres ]; 
+    platforms = stdenv.lib.platforms.linux;
   };
 }

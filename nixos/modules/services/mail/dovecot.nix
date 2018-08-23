@@ -4,16 +4,18 @@ with lib;
 
 let
   cfg = config.services.dovecot2;
-  dovecotPkg = cfg.package;
+  dovecotPkg = pkgs.dovecot;
 
   baseDir = "/run/dovecot2";
   stateDir = "/var/lib/dovecot";
+
+  canCreateMailUserGroup = cfg.mailUser != null && cfg.mailGroup != null;
 
   dovecotConf = concatStrings [
     ''
       base_dir = ${baseDir}
       protocols = ${concatStringsSep " " cfg.protocols}
-      sendmail_path = /var/setuid-wrappers/sendmail
+      sendmail_path = /run/wrappers/bin/sendmail
     ''
 
     (if isNull cfg.sslServerCert then ''
@@ -60,12 +62,75 @@ let
       }
     '')
 
+    (optionalString (cfg.mailboxes != []) ''
+      protocol imap {
+        namespace inbox {
+          inbox=yes
+          ${concatStringsSep "\n" (map mailboxConfig cfg.mailboxes)}
+        }
+      }
+    '')
+
+    (optionalString cfg.enableQuota ''
+      mail_plugins = $mail_plugins quota
+      service quota-status {
+        executable = ${dovecotPkg}/libexec/dovecot/quota-status -p postfix
+        inet_listener {
+          port = ${cfg.quotaPort}
+        }
+        client_limit = 1
+      }
+
+      protocol imap {
+        mail_plugins = $mail_plugins imap_quota
+      }
+
+      plugin {
+        quota_rule = *:storage=${cfg.quotaGlobalPerUser} 
+        quota = maildir:User quota # per virtual mail user quota # BUG/FIXME broken, we couldn't get this working
+        quota_status_success = DUNNO
+        quota_status_nouser = DUNNO
+        quota_status_overquota = "552 5.2.2 Mailbox is full"
+        quota_grace = 10%%
+      }
+    '')
+
     cfg.extraConfig
   ];
 
-  modulesDir = pkgs.symlinkJoin "dovecot-modules"
-    (map (pkg: "${pkg}/lib/dovecot") ([ dovecotPkg ] ++ map (module: module.override { dovecot = dovecotPkg; }) cfg.modules));
+  modulesDir = pkgs.symlinkJoin {
+    name = "dovecot-modules";
+    paths = map (pkg: "${pkg}/lib/dovecot") ([ dovecotPkg ] ++ map (module: module.override { dovecot = dovecotPkg; }) cfg.modules);
+  };
 
+  mailboxConfig = mailbox: ''
+    mailbox "${mailbox.name}" {
+      auto = ${toString mailbox.auto}
+  '' + optionalString (mailbox.specialUse != null) ''
+      special_use = \${toString mailbox.specialUse}
+  '' + "}";
+
+  mailboxes = { lib, pkgs, ... }: {
+    options = {
+      name = mkOption {
+        type = types.strMatching ''[^"]+'';
+        example = "Spam";
+        description = "The name of the mailbox.";
+      };
+      auto = mkOption {
+        type = types.enum [ "no" "create" "subscribe" ];
+        default = "no";
+        example = "subscribe";
+        description = "Whether to automatically create or create and subscribe to the mailbox or not.";
+      };
+      specialUse = mkOption {
+        type = types.nullOr (types.enum [ "All" "Archive" "Drafts" "Flagged" "Junk" "Sent" "Trash" ]);
+        default = null;
+        example = "Junk";
+        description = "Null if no special use flag is set. Other than that every use flag mentioned in the RFC is valid.";
+      };
+    };
+  };
 in
 {
 
@@ -74,7 +139,7 @@ in
 
     enablePop3 = mkOption {
       type = types.bool;
-      default = true;
+      default = false;
       description = "Start the POP3 listener (when Dovecot is enabled).";
     };
 
@@ -96,13 +161,6 @@ in
       description = "Additional listeners to start when Dovecot is enabled.";
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.dovecot;
-      defaultText = "pkgs.dovecot";
-      description = "Dovecot package to use.";
-    };
-
     user = mkOption {
       type = types.str;
       default = "dovecot2";
@@ -116,7 +174,7 @@ in
     };
 
     extraConfig = mkOption {
-      type = types.str;
+      type = types.lines;
       default = "";
       example = "mail_debug = yes";
       description = "Additional entries to put verbatim into Dovecot's config file.";
@@ -150,6 +208,14 @@ in
       description = "Default group to store mail for virtual users.";
     };
 
+    createMailUser = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''Whether to automatically create the user
+        given in <option>services.dovecot.user</option> and the group
+        given in <option>services.dovecot.group</option>.'';
+    };
+
     modules = mkOption {
       type = types.listOf types.package;
       default = [];
@@ -157,8 +223,7 @@ in
       description = ''
         Symlinks the contents of lib/dovecot of every given package into
         /etc/dovecot/modules. This will make the given modules available
-        if a dovecot package with the module_dir patch applied (like
-        pkgs.dovecot22, the default) is being used.
+        if a dovecot package with the module_dir patch applied is being used.
       '';
     };
 
@@ -197,6 +262,36 @@ in
       default = false;
       description = "Show the PAM failure message on authentication error (useful for OTPW).";
     };
+
+    mailboxes = mkOption {
+      type = types.listOf (types.submodule mailboxes);
+      default = [];
+      example = [ { name = "Spam"; specialUse = "Junk"; auto = "create"; } ];
+      description = "Configure mailboxes and auto create or subscribe them.";
+    };
+
+    enableQuota = mkOption {
+      type = types.bool;
+      default = false;
+      example = true;
+      description = "Whether to enable the dovecot quota service.";
+    };
+
+    quotaPort = mkOption {
+      type = types.str;
+      default = "12340";
+      description = ''
+        The Port the dovecot quota service binds to.
+        If using postfix, add check_policy_service inet:localhost:12340 to your smtpd_recipient_restrictions in your postfix config.
+      '';
+    };
+    quotaGlobalPerUser = mkOption {
+      type = types.str;
+      default = "100G";
+      example = "10G";
+      description = "Quota limit for the user in bytes. Supports suffixes b, k, M, G, T and %.";
+    };
+
   };
 
 
@@ -220,11 +315,20 @@ in
            uid = config.ids.uids.dovecot2;
            description = "Dovecot user";
            group = cfg.group;
-         };
+         }
+      ++ optional (cfg.createMailUser && cfg.mailUser != null)
+         ({ name = cfg.mailUser;
+            description = "Virtual Mail User";
+         } // optionalAttrs (cfg.mailGroup != null) {
+           group = cfg.mailGroup;
+         });
 
     users.extraGroups = optional (cfg.group == "dovecot2")
       { name = "dovecot2";
         gid = config.ids.gids.dovecot2;
+      }
+    ++ optional (cfg.createMailUser && cfg.mailGroup != null)
+      { name = cfg.mailGroup;
       };
 
     environment.etc."dovecot/modules".source = modulesDir;
@@ -247,6 +351,9 @@ in
         RuntimeDirectory = [ "dovecot2" ];
       };
 
+      # When copying sieve scripts preserve the original time stamp
+      # (should be 0) so that the compiled sieve script is newer than
+      # the source file and Dovecot won't try to compile it.
       preStart = ''
         rm -rf ${stateDir}/sieve
       '' + optionalString (cfg.sieveScripts != {}) ''
@@ -254,11 +361,11 @@ in
         ${concatStringsSep "\n" (mapAttrsToList (to: from: ''
           if [ -d '${from}' ]; then
             mkdir '${stateDir}/sieve/${to}'
-            cp "${from}/"*.sieve '${stateDir}/sieve/${to}'
+            cp -p "${from}/"*.sieve '${stateDir}/sieve/${to}'
           else
-            cp '${from}' '${stateDir}/sieve/${to}'
+            cp -p '${from}' '${stateDir}/sieve/${to}'
           fi
-           ${pkgs.dovecot_pigeonhole}/bin/sievec '${stateDir}/sieve/${to}'
+          ${pkgs.dovecot_pigeonhole}/bin/sievec '${stateDir}/sieve/${to}'
         '') cfg.sieveScripts)}
         chown -R '${cfg.mailUser}:${cfg.mailGroup}' '${stateDir}/sieve'
       '';
@@ -276,6 +383,9 @@ in
       }
       { assertion = cfg.showPAMFailure -> cfg.enablePAM;
         message = "dovecot is configured with showPAMFailure while enablePAM is disabled";
+      }
+      { assertion = (cfg.sieveScripts != {}) -> ((cfg.mailUser != null) && (cfg.mailGroup != null));
+        message = "dovecot requires mailUser and mailGroup to be set when sieveScripts is set";
       }
     ];
 

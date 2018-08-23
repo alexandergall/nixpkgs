@@ -1,9 +1,9 @@
-{ stdenv, fetchgit, fetchurl, python, makeWrapper, pkgconfig, gcc,
+{ stdenv, fetchgit, fetchurl, python2, makeWrapper, pkgconfig, gcc,
   pypy, libffi, libedit, libuv, boost, zlib,
   variant ? "jit", buildWithPypy ? false }:
 
 let
-  commit-count = "1333";
+  commit-count = "1364";
   common-flags = "--thread --gcrootfinder=shadowstack --continuation";
   variants = {
     jit = { flags = "--opt=jit"; target = "target.py"; };
@@ -13,16 +13,16 @@ let
   };
   pixie-src = fetchgit {
     url = "https://github.com/pixie-lang/pixie.git";
-    rev = "36ce07e1cd85ca82eedadf366bef3bb57a627a2a";
-    sha256 = "1b3v99c0is33w029r15qvd0mkrc5n1mrvjjmfpcd9yvhvqb2vcjs";
+    rev = "5eb0ccbe8b0087d3a5f2d0bbbc6998d624d3cd62";
+    sha256 = "0pf31x5h2m6dpxlidv98qay1y179qw40cw4cb4v4xa88gmq2f3vm";
   };
-  pypy-tag = "81254";
+  pypy-tag = "91db1a9";
   pypy-src = fetchurl {
     name = "pypy-src-${pypy-tag}";
     url = "https://bitbucket.org/pypy/pypy/get/${pypy-tag}.tar.bz2";
-    sha256 = "1cs9xqs1rmzdcnwxxkbvy064s5cbp6vvzhn2jmyzh5kg4di1r3bn";
+    sha256 = "0ylbqvhbcp5m09l15i2q2h3a0vjd055x2r37cq71lkhgmmaxrwbq";
   };
-  libs = [ libffi libedit libuv boost.dev boost.lib zlib ];
+  libs = [ libffi libedit libuv boost.dev boost.out zlib ];
   include-path = stdenv.lib.concatStringsSep ":"
                    (map (p: "${p}/include") libs);
   library-path = stdenv.lib.concatStringsSep ":"
@@ -32,11 +32,11 @@ let
   build = {flags, target}: stdenv.mkDerivation rec {
     name = "pixie-${version}";
     version = "0-r${commit-count}-${variant}";
-    nativeBuildInputs = libs;
-    buildInputs = [ pkgconfig makeWrapper ];
+    nativeBuildInputs = [ makeWrapper pkgconfig ];
+    buildInputs = libs;
     PYTHON = if buildWithPypy
       then "${pypy}/pypy-c/.pypy-c-wrapped"
-      else "${python}/bin/python";
+      else "${python2.interpreter}";
     unpackPhase = ''
       cp -R ${pixie-src} pixie-src
       mkdir pypy-src
@@ -47,7 +47,7 @@ let
     patchPhase = ''
       (cd pixie-src
        patch -p1 < ${./load_paths.patch}
-       libraryPaths='["${libuv}" "${libedit}" "${libffi}" "${boost.dev}" "${boost.lib}" "${zlib}"]'
+       libraryPaths='["${libuv}" "${libedit}" "${libffi.dev}" "${boost.dev}" "${boost.out}" "${zlib.dev}"]'
        export libraryPaths
        substituteAllInPlace ./pixie/ffi-infer.pxi)
     '';
@@ -56,24 +56,38 @@ let
       RPYTHON="`pwd`/pypy-src/rpython/bin/rpython";
       cd pixie-src
       $PYTHON $RPYTHON ${common-flags} ${target}
-      export LD_LIBRARY_PATH="${library-path}:$LD_LIBRARY_PATH"
       find pixie -name "*.pxi" -exec ./pixie-vm -c {} \;
     )'';
+    LD_LIBRARY_PATH = library-path;
+    C_INCLUDE_PATH = include-path;
+    LIBRARY_PATH = library-path;
+    PATH = bin-path;
     installPhase = ''
       mkdir -p $out/share $out/bin
       cp pixie-src/pixie-vm $out/share/pixie-vm
       cp -R pixie-src/pixie $out/share/pixie
-      makeWrapper $out/share/pixie-vm $out/bin/pxi \
-        --prefix LD_LIBRARY_PATH : ${library-path} \
-        --prefix C_INCLUDE_PATH : ${include-path} \
-        --prefix LIBRARY_PATH : ${library-path} \
-        --prefix PATH : ${bin-path}
+      makeWrapper $out/share/pixie-vm $out/bin/pixie \
+        --prefix LD_LIBRARY_PATH : ${LD_LIBRARY_PATH} \
+        --prefix C_INCLUDE_PATH : ${C_INCLUDE_PATH} \
+        --prefix LIBRARY_PATH : ${LIBRARY_PATH} \
+        --prefix PATH : ${PATH}
+    '';
+    doCheck = true;
+    checkPhase = ''
+      RES=$(./pixie-src/pixie-vm -e "(print :ok)")
+      if [ "$RES" != ":ok" ]; then
+        echo "ERROR Unexpected output: '$RES'"
+        return 1
+      else
+        echo "$RES"
+      fi
     '';
     meta = {
       description = "A clojure-like lisp, built with the pypy vm toolkit";
-      homepage = "https://github.com/pixie-lang/pixie";
+      homepage = https://github.com/pixie-lang/pixie;
       license = stdenv.lib.licenses.lgpl3;
-      platforms = stdenv.lib.platforms.linux;
+      platforms = ["x86_64-linux" "i686-linux" "x86_64-darwin"];
+      maintainers = with stdenv.lib.maintainers; [ bendlas ];
     };
   };
 in build (builtins.getAttr variant variants)

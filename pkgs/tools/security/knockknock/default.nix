@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub, buildPythonApplication, python, pycrypto, hping }:
+{ stdenv, fetchFromGitHub, python2Packages, hping }:
 
-buildPythonApplication rec {
+python2Packages.buildPythonApplication rec {
   rev  = "bf14bbff";
   name = "knockknock-r${rev}";
 
@@ -11,7 +11,10 @@ buildPythonApplication rec {
     sha256 = "1chpfs3w2vkjrgay69pbdr116z1jldv53fi768a1i05fdqhy1px4";
   };
 
-  propagatedBuildInputs = [ pycrypto ];
+  propagatedBuildInputs = [ python2Packages.pycrypto ];
+
+  # No tests
+  doCheck = false;
 
   patchPhase = ''
     sed -i '/build\//d' setup.py

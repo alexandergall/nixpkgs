@@ -2,15 +2,14 @@
 
 # Updating
 
-To update the list of packages from MELPA Stable,
+To update the list of packages from MELPA,
 
-1. Clone https://github.com/ttuegel/emacs2nix
-2. Clone https://github.com/milkypostman/melpa
-3. Run `./melpa-stable-packages.sh PATH_TO_MELPA_CLONE` from emacs2nix.
-   Error messages about missing versions are normal; most packages in
-   MELPA do not have a stable version.
-4. Copy the new melpa-stable-packages.json file into Nixpkgs
-5. `git commit -m "melpa-stable-packages $(date -Idate)"`
+1. Clone https://github.com/ttuegel/emacs2nix.
+2. Clone https://github.com/milkypostman/melpa.
+3. Run `./melpa-stable-packages.sh --melpa PATH_TO_MELPA_CLONE` from emacs2nix.
+4. Copy the new `melpa-stable-generated.nix` file into Nixpkgs.
+5. Check for evaluation errors: `nix-instantiate ./. -A emacsPackagesNg.melpaStablePackages`.
+6. `git add pkgs/applications/editors/emacs-modes/melpa-stable-generated.nix && git commit -m "melpa-stable-packages $(date -Idate)"`
 
 */
 
@@ -36,12 +35,11 @@ self:
     });
 
     overrides = {
-      ac-php = super.ac-php.override {
-        inherit (self.melpaPackages) company popup;
-      };
-
       # upstream issue: mismatched filename
       ack-menu = markBroken super.ack-menu;
+
+      # Expects bash to be at /bin/bash
+      ac-rtags = markBroken super.ac-rtags;
 
       airline-themes = super.airline-themes.override {
         inherit (self.melpaPackages) powerline;
@@ -51,14 +49,17 @@ self:
       bufshow = markBroken super.bufshow;
 
       # part of a larger package
+      caml = dontConfigure super.caml;
+
+      # part of a larger package
       # upstream issue: missing package version
       cmake-mode = markBroken (dontConfigure super.cmake-mode);
 
-      # upstream issue: missing file header
-      connection = markBroken super.connection;
+      # Expects bash to be at /bin/bash
+      company-rtags = markBroken super.company-rtags;
 
       # upstream issue: missing file header
-      crux = markBroken super.crux;
+      connection = markBroken super.connection;
 
       # upstream issue: missing file header
       dictionary = markBroken super.dictionary;
@@ -73,6 +74,9 @@ self:
       # upstream issue: missing file header
       elmine = markBroken super.elmine;
 
+      # upstream issue: missing dependency redshank
+      emr = markBroken super.emr;
+
       ess-R-data-view = super.ess-R-data-view.override {
         inherit (self.melpaPackages) ess ctable popup;
       };
@@ -81,8 +85,20 @@ self:
         inherit (self.melpaPackages) ess popup;
       };
 
+      # upstream issue: doesn't build
+      eterm-256color = markBroken super.eterm-256color;
+
+      # upstream issue: missing dependency highlight
+      evil-search-highlight-persist = markBroken super.evil-search-highlight-persist;
+
+      # upstream issue: missing dependency highlight
+      floobits  = markBroken super.floobits;
+
       # missing OCaml
       flycheck-ocaml = markBroken super.flycheck-ocaml;
+
+      # Expects bash to be at /bin/bash
+      flycheck-rtags = markBroken super.flycheck-rtags;
 
       # upstream issue: missing file header
       fold-dwim = markBroken super.fold-dwim;
@@ -93,11 +109,20 @@ self:
       # upstream issue: mismatched filename
       helm-lobsters = markBroken super.helm-lobsters;
 
+      # Expects bash to be at /bin/bash
+      helm-rtags = markBroken super.helm-rtags;
+
       # upstream issue: missing file header
       ido-complete-space-or-hyphen = markBroken super.ido-complete-space-or-hyphen;
 
       # upstream issue: missing file header
       initsplit = markBroken super.initsplit;
+
+      # upstream issue: recipe fails
+      insert-shebang = markBroken super.insert-shebang;
+
+      # Expects bash to be at /bin/bash
+      ivy-rtags = markBroken super.ivy-rtags;
 
       # upstream issue: missing file header
       jsfmt = markBroken super.jsfmt;
@@ -127,6 +152,9 @@ self:
       # missing OCaml
       ocp-indent = markBroken super.ocp-indent;
 
+      # upstream issue: missing file header
+      po-mode = markBroken super.po-mode;
+
       # upstream issue: truncated file
       powershell = markBroken super.powershell;
 
@@ -136,15 +164,14 @@ self:
       # upstream issue: missing file header
       qiita = markBroken super.qiita;
 
-      spaceline = super.spaceline.override {
-        inherit (self.melpaPackages) powerline;
-      };
-
       # upstream issue: missing file header
       speech-tagger = markBroken super.speech-tagger;
 
       # upstream issue: missing file header
       stgit = markBroken super.stgit;
+
+      # upstream issue: missing file header
+      tawny-mode = markBroken super.tawny-mode;
 
       # upstream issue: missing file header
       textmate = markBroken super.textmate;

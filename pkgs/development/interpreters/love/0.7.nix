@@ -1,5 +1,5 @@
 { stdenv, fetchurl, pkgconfig
-, SDL, mesa, openal, lua
+, SDL, libGLU_combined, openal, lua
 , libdevil, freetype, physfs
 , libmodplug, mpg123, libvorbis, libogg
 }:
@@ -11,8 +11,9 @@ stdenv.mkDerivation rec {
     sha256 = "0s7jywkvydlshlgy11ilzngrnybmq5xlgzp2v2dhlffwrfqdqym5";
   };
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig SDL mesa openal lua
+    SDL libGLU_combined openal lua
     libdevil freetype physfs libmodplug mpg123 libvorbis libogg
   ];
 
@@ -36,12 +37,12 @@ stdenv.mkDerivation rec {
   '';
 
   NIX_CFLAGS_COMPILE = ''
-    -I${SDL}/include/SDL
-    -I${freetype}include/freetype2
+    -I${SDL.dev}/include/SDL
+    -I${freetype.dev}include/freetype2
   '';
 
   meta = {
-    homepage = "http://love2d.org";
+    homepage = http://love2d.org;
     description = "A Lua-based 2D game engine/scripting language";
     license = stdenv.lib.licenses.zlib;
 

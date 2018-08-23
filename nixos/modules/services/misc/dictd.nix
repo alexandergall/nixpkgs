@@ -2,6 +2,10 @@
 
 with lib;
 
+let
+  cfg = config.services.dictd;
+in
+
 {
 
   ###### interface
@@ -11,6 +15,7 @@ with lib;
     services.dictd = {
 
       enable = mkOption {
+        type = types.bool;
         default = false;
         description = ''
           Whether to enable the DICT.org dictionary server.
@@ -18,8 +23,10 @@ with lib;
       };
 
       DBs = mkOption {
-        default = [];
-        # example = [ pkgs.dictDBs.nld2eng ];
+        type = types.listOf types.package;
+        default = with pkgs.dictdDBs; [ wiktionary wordnet ];
+        defaultText = "with pkgs.dictdDBs; [ wiktionary wordnet ]";
+        example = literalExample "[ pkgs.dictdDBs.nld2eng ]";
         description = ''List of databases to make available.'';
       };
 
@@ -32,8 +39,8 @@ with lib;
 
   config = let dictdb = pkgs.dictDBCollector { dictlist = map (x: {
                name = x.name;
-               filename = x; } ) config.services.dictd.DBs; };
-  in mkIf config.services.dictd.enable {
+               filename = x; } ) cfg.DBs; };
+  in mkIf cfg.enable {
 
     # get the command line client on system path to make some use of the service
     environment.systemPackages = [ pkgs.dict ];

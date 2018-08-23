@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchurl, pkgconfig, expat, systemd, glib, dbus_glib, python
+{ stdenv, lib, fetchurl, pkgconfig, expat, systemd
 , libX11 ? null, libICE ? null, libSM ? null, x11Support ? (stdenv.isLinux || stdenv.isDarwin) }:
 
 assert x11Support -> libX11 != null
@@ -6,19 +6,19 @@ assert x11Support -> libX11 != null
                   && libSM != null;
 
 let
-  version = "1.8.20";
-  sha256 = "0fkh3d5r57a659hw9lqnw4v0bc5556vx54fsf7l9c732ci6byksw";
+  version = "1.10.24";
+  sha256 = "06ydmrg76l1kwl3190d72zpiy3qxy248x6gskxbj9qiqfsr4w63i";
 
-self =  stdenv.mkDerivation {
+self = stdenv.mkDerivation {
     name = "dbus-${version}";
+    inherit version;
 
     src = fetchurl {
       url = "http://dbus.freedesktop.org/releases/dbus/dbus-${version}.tar.gz";
       inherit sha256;
     };
 
-    patches = [ ./ignore-missing-includedirs.patch ]
-      ++ lib.optional stdenv.isSunOS ./implement-getgrouplist.patch;
+    patches = lib.optional stdenv.isSunOS ./implement-getgrouplist.patch;
     postPatch = ''
       substituteInPlace tools/Makefile.in \
         --replace 'install-localstatelibDATA:' 'disabled:' \
@@ -33,7 +33,7 @@ self =  stdenv.mkDerivation {
         --replace 'DBUS_DAEMONDIR"/dbus-daemon"' '"/run/current-system/sw/bin/dbus-daemon"'
     '';
 
-    outputs = [ "dev" "out" "lib" "doc" ];
+    outputs = [ "out" "dev" "lib" "doc" ];
 
     nativeBuildInputs = [ pkgconfig ];
     propagatedBuildInputs = [ expat ];
@@ -45,10 +45,13 @@ self =  stdenv.mkDerivation {
       "--localstatedir=/var"
       "--sysconfdir=/etc"
       "--with-session-socket-dir=/tmp"
+      "--with-system-pid-file=/run/dbus/pid"
+      "--with-system-socket=/run/dbus/system_bus_socket"
       "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
-      # this package installs nothing into those dirs and they create a dependency
-      "--datadir=/run/current-system/sw/share"
-      "--libexecdir=$(out)/libexec" # we don't need dbus-daemon-launch-helper
+      "--with-systemduserunitdir=$(out)/etc/systemd/user"
+      "--enable-user-session"
+      "--datadir=/etc"
+      "--libexecdir=$(out)/libexec"
     ] ++ lib.optional (!x11Support) "--without-x";
 
     # Enable X11 autolaunch support in libdbus. This doesn't actually depend on X11
@@ -61,7 +64,12 @@ self =  stdenv.mkDerivation {
 
     doCheck = true;
 
-    installFlags = "sysconfdir=$(out)/etc datadir=$(out)/share";
+    installFlags = [ "sysconfdir=$(out)/etc" "datadir=$(out)/share" ];
+
+    postInstall = ''
+      mkdir -p "$out/share/xml/dbus"
+      cp doc/*.dtd "$out/share/xml/dbus"
+    '';
 
     # it's executed from $lib by absolute path
     postFixup = ''
@@ -82,4 +90,3 @@ self =  stdenv.mkDerivation {
     };
   };
 in self
-

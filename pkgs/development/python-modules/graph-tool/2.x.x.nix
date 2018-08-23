@@ -3,7 +3,7 @@ pkgconfig, boost, expat, scipy, numpy, cgal, gmp, mpfr, lndir,
 gobjectIntrospection, pygobject3, gtk3, matplotlib }:
 
 stdenv.mkDerivation rec {
-  version = "2.12";
+  version = "2.16";
   name = "${python.libPrefix}-graph-tool-${version}";
 
   meta = with stdenv.lib; {
@@ -11,12 +11,12 @@ stdenv.mkDerivation rec {
     homepage    = http://graph-tool.skewed.de/;
     license     = licenses.gpl3;
     platforms   = platforms.all;
-    maintainer  = [ stdenv.lib.maintainers.joelmo ];
+    maintainers = [ stdenv.lib.maintainers.joelmo ];
   };
 
   src = fetchurl {
-    url = "https://github.com/count0/graph-tool/archive/release-${version}.tar.gz";
-    sha256 = "12w58djyx6nn00wixqnxnxby9ksabhzdkkvynl8b89parfvfbpwl";
+    url = "https://downloads.skewed.de/graph-tool/graph-tool-${version}.tar.bz2";
+    sha256 = "03b1pmh2gvsgyq491gvskx8fwgqy9k942faymdnhwpbbbfhx911p";
   };
 
   configureFlags = [
@@ -24,7 +24,8 @@ stdenv.mkDerivation rec {
     "--enable-openmp"
   ];
 
-  buildInputs = [ pkgconfig autoreconfHook ];
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [ ];
 
   propagatedBuildInputs = [
     boost

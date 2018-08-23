@@ -1,21 +1,38 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool_2
-, llvm, libcxx, libcxxabi, clang, openssl, libuuid
-, libobjc ? null
+{ stdenv, fetchFromGitHub, makeWrapper, autoconf, automake, libtool_2
+, llvm, libcxx, libcxxabi, clang, libuuid
+, libobjc ? null, maloader ? null, xctoolchain ? null
+, hostPlatform, targetPlatform
 }:
 
 let
+  # The targetPrefix prepended to binary names to allow multiple binuntils on the
+  # PATH to both be usable.
+  targetPrefix = stdenv.lib.optionalString
+    (targetPlatform != hostPlatform)
+    "${targetPlatform.config}-";
+in
+
+assert targetPlatform.isDarwin;
+
+# Non-Darwin alternatives
+assert (!hostPlatform.isDarwin) -> (maloader != null && xctoolchain != null);
+
+let
   baseParams = rec {
-    name = "cctools-port-${version}";
-    version = "877.5";
+    name = "${targetPrefix}cctools-port-${version}";
+    version = "895";
 
     src = fetchFromGitHub {
       owner  = "tpoechtrager";
       repo   = "cctools-port";
-      rev    = "7d405492b09fa27546caaa989b8493829365deab";
-      sha256 = "0nj1q5bqdx5jm68dispybxc7wnkb6p8p2igpnap9q6qyv2r9p07w";
+      rev    = "2e569d765440b8cd6414a695637617521aa2375b"; # From branch 895-ld64-274.2
+      sha256 = "0l45mvyags56jfi24rawms8j2ihbc45mq7v13pkrrwppghqrdn52";
     };
 
-    buildInputs = [ autoconf automake libtool_2 openssl libuuid ] ++
+    outputs = [ "out" "dev" ];
+
+    nativeBuildInputs = [ autoconf automake libtool_2 ];
+    buildInputs = [ libuuid ] ++
       # Only need llvm and clang if the stdenv isn't already clang-based (TODO: just make a stdenv.cc.isClang)
       stdenv.lib.optionals (!stdenv.isDarwin) [ llvm clang ] ++
       stdenv.lib.optionals stdenv.isDarwin [ libcxxabi libobjc ];
@@ -24,9 +41,19 @@ let
       ./ld-rpath-nonfinal.patch ./ld-ignore-rpath-link.patch
     ];
 
+    __propagatedImpureHostDeps = [
+      # As far as I can tell, otool from cctools is the only thing that depends on these two, and we should fix them
+      "/usr/lib/libobjc.A.dylib"
+      "/usr/lib/libobjc.dylib"
+    ];
+
     enableParallelBuilding = true;
 
-    configureFlags = stdenv.lib.optionals (!stdenv.isDarwin) [ "CXXFLAGS=-I${libcxx}/include/c++/v1" ];
+    # TODO(@Ericson2314): Always pass "--target" and always targetPrefix.
+    configurePlatforms = [ "build" "host" ] ++ stdenv.lib.optional (targetPlatform != hostPlatform) "target";
+    configureFlags = stdenv.lib.optionals (!stdenv.isDarwin) [
+      "CXXFLAGS=-I${libcxx}/include/c++/v1"
+    ];
 
     postPatch = ''
       sed -i -e 's/addStandardLibraryDirectories = true/addStandardLibraryDirectories = false/' cctools/ld64/src/ld/Options.cpp
@@ -69,33 +96,30 @@ let
       popd
     '';
 
+    postInstall =
+      if hostPlatform.isDarwin
+      then ''
+        cat >$out/bin/dsymutil << EOF
+        #!${stdenv.shell}
+        EOF
+        chmod +x $out/bin/dsymutil
+      ''
+      else ''
+        for tool in dyldinfo dwarfdump dsymutil; do
+          ${makeWrapper}/bin/makeWrapper "${maloader}/bin/ld-mac" "$out/bin/${targetPlatform.config}-$tool" \
+            --add-flags "${xctoolchain}/bin/$tool"
+          ln -s "$out/bin/${targetPlatform.config}-$tool" "$out/bin/$tool"
+        done
+      '';
+
+    passthru = {
+      inherit targetPrefix;
+    };
+
     meta = {
-      homepage = "http://www.opensource.apple.com/source/cctools/";
-      description = "Mac OS X Compiler Tools (cross-platform port)";
+      homepage = http://www.opensource.apple.com/source/cctools/;
+      description = "MacOS Compiler Tools (cross-platform port)";
       license = stdenv.lib.licenses.apsl20;
     };
   };
-in {
-  native = stdenv.mkDerivation (baseParams // {
-    # A hack for now...
-    postInstall = ''
-      cat >$out/bin/dsymutil << EOF
-      #!${stdenv.shell}
-      EOF
-      chmod +x $out/bin/dsymutil
-    '';
-  });
-
-  cross =
-    { cross, maloader, makeWrapper, xctoolchain}: stdenv.mkDerivation (baseParams // {
-      configureFlags = baseParams.configureFlags ++ [ "--target=${cross.config}" ];
-
-      postInstall = ''
-        for tool in dyldinfo dwarfdump dsymutil; do
-          ${makeWrapper}/bin/makeWrapper "${maloader}/bin/ld-mac" "$out/bin/${cross.config}-$tool" \
-            --add-flags "${xctoolchain}/bin/$tool"
-          ln -s "$out/bin/${cross.config}-$tool" "$out/bin/$tool"
-        done
-      '';
-    });
-}
+in stdenv.mkDerivation baseParams

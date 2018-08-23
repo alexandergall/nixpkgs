@@ -1,17 +1,19 @@
-{ fetchFromGitHub, makeWrapper, pythonPackages, stdenv }:
+{ lib, buildPythonApplication, fetchFromGitHub, makeWrapper
+, arrow, futures, logfury, requests, six, tqdm
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "backblaze-b2-${version}";
-  version = "0.4.4";
+buildPythonApplication rec {
+  pname = "backblaze-b2";
+  version = "1.1.0";
 
   src = fetchFromGitHub {
     owner = "Backblaze";
     repo = "B2_Command_Line_Tool";
-    rev = "74a5e567925899f1fc6204aa85d4c84c0d0e511a";
-    sha256 = "1g9j5s69w6n70nb18rvx3gm9f4gi1vis23ib8rn2v1khv6z2acqp";
+    rev = "v${version}";
+    sha256 = "0697rcdsmxz51p4b8m8klx2mf5xnx6vx56vcf5jmzidh8mc38a6z";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ six ];
+  propagatedBuildInputs = [ arrow futures logfury requests six tqdm ];
 
   checkPhase = ''
     python test_b2_command_line.py test
@@ -27,7 +29,7 @@ pythonPackages.buildPythonApplication rec {
     cp contrib/bash_completion/b2 "$out/etc/bash_completion.d/backblaze-b2"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Command-line tool for accessing the Backblaze B2 storage service";
     homepage = https://github.com/Backblaze/B2_Command_Line_Tool;
     license = licenses.mit;

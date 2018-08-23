@@ -1,20 +1,13 @@
 { stdenv, fetchurl, perl, unzip }:
-let
-  s = # Generated upstream information
-  rec {
-    baseName="zpaq";
-    version="710";
-    name="${baseName}-${version}";
-    hash="089h09rlcyag1j1i38jjzwzm69p6p4wnh6n2rsbl3p5mcvdfnwhk";
-    url="http://mattmahoney.net/dc/zpaq710.zip";
-    sha256="089h09rlcyag1j1i38jjzwzm69p6p4wnh6n2rsbl3p5mcvdfnwhk";
-  };
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
+stdenv.mkDerivation rec {
+  name = "zpaq-${version}";
+  version = "715";
 
-  src = fetchurl {
-    inherit (s) url sha256;
+  src = let
+    mungedVersion = with stdenv.lib; concatStrings (splitString "." version);
+  in fetchurl {
+    sha256 = "066l94yyladlfzri877nh2dhkvspagjn3m5bmv725fmhkr9c4pp8";
+    url = "http://mattmahoney.net/dc/zpaq${mungedVersion}.zip";
   };
 
   sourceRoot = ".";
@@ -27,9 +20,9 @@ stdenv.mkDerivation {
       + (lib.optionalString (!isi686 && !isx86_64) "-DNOJIT ")
       + "-Dunix";
     CXXFLAGS = with stdenv; ""
-      + (lib.optionalString (isi686) "-march=i686 ")
-      + (lib.optionalString (isx86_64) "-march=nocona ")
-      + "-O3 -mtune=generic -DNDEBUG";
+      + (lib.optionalString isi686   "-march=i686   -mtune=generic ")
+      + (lib.optionalString isx86_64 "-march=nocona -mtune=generic ")
+      + "-O3 -DNDEBUG";
   in ''
     buildFlagsArray=( "CPPFLAGS=${CPPFLAGS}" "CXXFLAGS=${CXXFLAGS}" )
   '';
@@ -39,11 +32,11 @@ stdenv.mkDerivation {
   installFlags = [ "PREFIX=$(out)" ];
 
   meta = with stdenv.lib; {
-    inherit (s) version;
     description = "Incremental journaling backup utility and archiver";
+    homepage = http://mattmahoney.net/dc/zpaq.html;
     license = licenses.gpl3Plus ;
-    maintainers = with maintainers; [ raskin nckx ];
+    maintainers = with maintainers; [ raskin ];
     platforms = platforms.linux;
-    homepage = "http://mattmahoney.net/dc/zpaq.html";
+    inherit version;
   };
 }

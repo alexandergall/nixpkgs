@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   name = "picocom-${version}";
-  version = "2.1";
+  version = "3.1";
 
   src = fetchFromGitHub {
     owner = "npat-efault";
     repo = "picocom";
     rev = version;
-    sha256 = "1ac3xdfiw5bd24lw4l9hxc75rcagw0y182x7svhkqp2gwsvzkbjv";
+    sha256 = "1vvjydqf0ax47nvdyyl67jafw5b3sfsav00xid6qpgia1gs2r72n";
   };
 
   buildInputs = [ makeWrapper ];

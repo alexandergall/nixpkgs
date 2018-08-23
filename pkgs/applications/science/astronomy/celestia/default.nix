@@ -1,5 +1,5 @@
 { stdenv, fetchurl, freeglut, gtk2, gtkglext, libjpeg_turbo, libtheora, libXmu
-, lua, mesa, pkgconfig, perl, autoreconfHook, glib, cairo
+, lua, libGLU_combined, pkgconfig, perl, autoreconfHook, glib, cairo
 , pango, gdk_pixbuf, atk
 }:
 
@@ -44,7 +44,8 @@ stdenv.mkDerivation {
     sha256 = "1i1lvhbgllsh2z8i6jj4mvrjak4a7r69psvk7syw03s4p7670mfk";
   };
 
-  buildInputs = [ freeglut gtk2 gtkglext libjpeg_turbo libtheora libXmu mesa pkgconfig lua
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ freeglut gtk2 gtkglext libjpeg_turbo libtheora libXmu libGLU_combined lua
     perl autoreconfHook ];
 
   patchPhase = ''
@@ -59,7 +60,7 @@ stdenv.mkDerivation {
   CPPFLAGS = "-DNDEBUG";
   CFLAGS = "-O2 -fsigned-char";
   CXXFLAGS = "-O2 -fsigned-char";
-  GTK_CFLAGS = "-I${gtk2.dev}/include/gtk-2.0 -I${gtk2.out}/lib/gtk-2.0/include -I${glib.dev}/include/glib-2.0 -I${glib.out}/lib/glib-2.0/include -I${cairo.dev}/include/cairo -I${pango.dev}/include/pango-1.0 -I${gdk_pixbuf.dev}/include/gdk-pixbuf-2.0 -I${atk}/include/atk-1.0 -I${gtkglext}/include/gtkglext-1.0 -I${gtkglext}/lib/gtkglext-1.0/include";
+  GTK_CFLAGS = "-I${gtk2.dev}/include/gtk-2.0 -I${gtk2.out}/lib/gtk-2.0/include -I${glib.dev}/include/glib-2.0 -I${glib.out}/lib/glib-2.0/include -I${cairo.dev}/include/cairo -I${pango.dev}/include/pango-1.0 -I${gdk_pixbuf.dev}/include/gdk-pixbuf-2.0 -I${atk.dev}/include/atk-1.0 -I${gtkglext}/include/gtkglext-1.0 -I${gtkglext}/lib/gtkglext-1.0/include";
   GTK_LIBS = "-lgtk-x11-2.0 -lgtkglext-x11-1.0 -lcairo -lgdk_pixbuf-2.0 -lpango-1.0 -lgobject-2.0";
 
   installPhase = ''make MKDIR_P="mkdir -p" install'';
@@ -68,10 +69,10 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Free space simulation";
-    homepage = "http://www.shatters.net/celestia/";
+    homepage = http://www.shatters.net/celestia/;
     license = stdenv.lib.licenses.gpl2;
 
     platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.simons ];
+    maintainers = [ stdenv.lib.maintainers.peti ];
   };
 }

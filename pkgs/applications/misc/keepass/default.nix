@@ -1,26 +1,36 @@
-{ stdenv, lib, fetchurl, buildDotnetPackage, makeWrapper, unzip, makeDesktopItem, icoutils, plugins ? [] }:
+{ stdenv, lib, fetchurl, buildDotnetPackage, substituteAll, makeWrapper, makeDesktopItem,
+  unzip, icoutils, gtk2, xorg, xdotool, xsel, plugins ? [] }:
 
-# KeePass looks for plugins in under directory in which KeePass.exe is
-# located. It follows symlinks where looking for that directory, so
-# buildEnv is not enough to bring KeePass and plugins together.
-#
-# This derivation patches KeePass to search for plugins in specified
-# plugin derivations in the Nix store and nowhere else.
 with builtins; buildDotnetPackage rec {
   baseName = "keepass";
-  version = "2.32";
+  version = "2.38";
 
   src = fetchurl {
     url = "mirror://sourceforge/keepass/KeePass-${version}-Source.zip";
-    sha256 = "11bkflmqrpfk95v2j7pjcm78nilx2s611mn2x7kxwn77ilnbcjbw";
+    sha256 = "0m33gfpvv01xc28k4rrc8llbyk6qanm9rsqcnv8ydms0cr78dbbk";
   };
 
   sourceRoot = ".";
 
   buildInputs = [ unzip makeWrapper icoutils ];
 
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      xsel = "${xsel}/bin/xsel";
+      xprop = "${xorg.xprop}/bin/xprop";
+      xdotool = "${xdotool}/bin/xdotool";
+    })
+  ];
+
+  # KeePass looks for plugins in under directory in which KeePass.exe is
+  # located. It follows symlinks where looking for that directory, so
+  # buildEnv is not enough to bring KeePass and plugins together.
+  #
+  # This derivation patches KeePass to search for plugins in specified
+  # plugin derivations in the Nix store and nowhere else.
   pluginLoadPathsPatch =
-    let outputLc = toString (add 8 (length plugins));
+    let outputLc = toString (add 7 (length plugins));
         patchTemplate = readFile ./keepass-plugins.patch;
         loadTemplate  = readFile ./keepass-plugins-load.patch;
         loads =
@@ -72,6 +82,8 @@ with builtins; buildDotnetPackage rec {
   # is found and does not pollute output path.
   binPaths = lib.concatStrings (lib.intersperse ":" (map (x: x + "/bin") plugins));
 
+  dynlibPath = stdenv.lib.makeLibraryPath [ gtk2 ];
+
   postInstall = 
   let
     extractFDeskIcons = ./extractWinRscIconsToStdFreeDesktopDir.sh;
@@ -79,7 +91,9 @@ with builtins; buildDotnetPackage rec {
   ''
     mkdir -p "$out/share/applications"
     cp ${desktopItem}/share/applications/* $out/share/applications
-    wrapProgram $out/bin/keepass --prefix PATH : "$binPaths"
+    wrapProgram $out/bin/keepass \
+      --prefix PATH : "$binPaths" \
+      --prefix LD_LIBRARY_PATH : "$dynlibPath"
 
     ${extractFDeskIcons} \
       "./Translation/TrlUtil/Resources/KeePass.ico" \
@@ -94,7 +108,7 @@ with builtins; buildDotnetPackage rec {
   meta = {
     description = "GUI password manager with strong cryptography";
     homepage = http://www.keepass.info/;
-    maintainers = with stdenv.lib.maintainers; [ amorsillo obadz jraygauthier ];
+    maintainers = with stdenv.lib.maintainers; [ amorsillo obadz joncojonathan jraygauthier ];
     platforms = with stdenv.lib.platforms; all;
     license = stdenv.lib.licenses.gpl2;
   };

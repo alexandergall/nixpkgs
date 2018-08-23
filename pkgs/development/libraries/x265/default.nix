@@ -16,15 +16,17 @@ in
 
 stdenv.mkDerivation rec {
   name = "x265-${version}";
-  version = "1.9";
+  version = "2.6";
 
   src = fetchurl {
     urls = [
       "http://get.videolan.org/x265/x265_${version}.tar.gz"
       "https://github.com/videolan/x265/archive/${version}.tar.gz"
     ];
-    sha256 = "1j0mbcf10aj6zi1nxql45f9817jd2ndcpd7x123sjmyr7q9m8iiy";
+    sha256 = "1gyd94jkwdii9308m07nymsbxrmrcl81c0j8i10zhslr2mj07w0v";
   };
+
+  enableParallelBuilding = true;
 
   patchPhase = ''
     sed -i 's/unknown/${version}/g' source/cmake/version.cmake
@@ -47,9 +49,11 @@ stdenv.mkDerivation rec {
     cd source
   '';
 
-  nativeBuildInputs = [ cmake yasm ];
+  postInstall = ''
+    rm $out/lib/*.a
+  '';
 
-  NIX_LDFLAGS = "-L${stdenv.cc.libc.out}/lib"; #outputs TODO: this is strange
+  nativeBuildInputs = [ cmake yasm ];
 
   meta = with stdenv.lib; {
     description = "Library for encoding h.265/HEVC video streams";

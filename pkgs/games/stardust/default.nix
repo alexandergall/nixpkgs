@@ -1,5 +1,5 @@
 { stdenv, fetchurl, zlib, libtiff, libxml2, SDL, xproto, libX11
-, libXi, inputproto, libXmu, libXext, xextproto, mesa }:
+, libXi, inputproto, libXmu, libXext, xextproto, libGLU_combined }:
 
 stdenv.mkDerivation rec {
   name = "stardust-${version}";
@@ -12,10 +12,12 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     zlib libtiff libxml2 SDL xproto libX11 libXi inputproto
-    libXmu libXext xextproto mesa
+    libXmu libXext xextproto libGLU_combined
   ];
 
   installFlags = [ "bindir=\${out}/bin" ];
+
+  hardeningDisable = [ "format" ];
 
   postConfigure = ''
     substituteInPlace config.h \

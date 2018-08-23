@@ -9,11 +9,16 @@ stdenv.mkDerivation rec {
   name = "ign-transport-${version}";
   inherit src;
 
-  buildInputs = [ cmake protobuf zeromq pkgconfig
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ cmake protobuf zeromq
     utillinux # we need utillinux/e2fsprogs uuid/uuid.h
   ];
 
   propagatedBuildInputs = [ cppzmq ];
+
+  postPatch = ''
+    substituteInPlace cmake/ignition-config.cmake.in --replace "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_" "@CMAKE_INSTALL_"
+  '';
 
   meta = with stdenv.lib; {
     homepage = http://ignitionrobotics.org/libraries/math;

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgconfig, intltool, dbus_glib, gdk_pixbuf, curl, freetype
+{ stdenv, fetchurl, pkgconfig, intltool, dbus-glib, gdk_pixbuf, curl, freetype
 , libgsf, poppler, bzip2 }:
 let
   p_name  = "tumbler";
@@ -13,10 +13,11 @@ stdenv.mkDerivation rec {
     sha256 = "0wvip28gm2w061hn84zp2q4dv947ihylrppahn4cjspzff935zfh";
   };
 
-  outputs = [ "dev" "out" "docdev" ];
+  outputs = [ "out" "dev" "devdoc" ];
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig intltool dbus_glib gdk_pixbuf curl freetype
+    intltool dbus-glib gdk_pixbuf curl freetype
     poppler libgsf bzip2
   ];
 

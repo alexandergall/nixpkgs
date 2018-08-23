@@ -7,7 +7,7 @@ let
   e = pkgs.enlightenment;
   xcfg = config.services.xserver;
   cfg = xcfg.desktopManager.enlightenment;
-  GST_PLUGIN_PATH = lib.makeSearchPath "lib/gstreamer-1.0" [
+  GST_PLUGIN_PATH = lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
     pkgs.gst_all_1.gst-plugins-base
     pkgs.gst_all_1.gst-plugins-good
     pkgs.gst_all_1.gst-plugins-bad
@@ -20,7 +20,6 @@ in
 
     services.xserver.desktopManager.enlightenment.enable = mkOption {
       default = false;
-      example = true;
       description = "Enable the Enlightenment desktop environment.";
     };
 
@@ -29,13 +28,13 @@ in
   config = mkIf (xcfg.enable && cfg.enable) {
 
     environment.systemPackages = [
-      e.efl e.evas e.emotion e.elementary e.enlightenment
+      e.efl e.enlightenment
       e.terminology e.econnman
       pkgs.xorg.xauth # used by kdesu
-      pkgs.gtk # To get GTK+'s themes.
+      pkgs.gtk2 # To get GTK+'s themes.
       pkgs.tango-icon-theme
-      pkgs.shared_mime_info
-      pkgs.gnome.gnomeicontheme
+      pkgs.shared-mime-info
+      pkgs.gnome2.gnomeicontheme
       pkgs.xorg.xcursorthemes
     ];
 
@@ -48,7 +47,7 @@ in
         export GTK_DATA_PREFIX=${config.system.path}
         # find theme engines
         export GTK_PATH=${config.system.path}/lib/gtk-3.0:${config.system.path}/lib/gtk-2.0
-        export XDG_MENU_PREFIX=enlightenment
+        export XDG_MENU_PREFIX=e-
 
         export GST_PLUGIN_PATH="${GST_PLUGIN_PATH}"
 
@@ -62,10 +61,10 @@ in
       '';
     }];
 
-    security.setuidPrograms = [ "e_freqset" ];
+    security.wrappers = (import (builtins.toPath "${e.enlightenment}/e-wrappers.nix")).security.wrappers;
 
     environment.etc = singleton
-      { source = "${pkgs.xkeyboard_config}/etc/X11/xkb";
+      { source = xcfg.xkbDir;
         target = "X11/xkb";
       };
 

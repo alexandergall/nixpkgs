@@ -14,7 +14,7 @@ stdenv.mkDerivation rec {
     sha256 = "0s029m4iw0nsvnsm2hlz8yajrasdvf315iv2dw8mfm7nhbshwsqa";
   };
 
-  buildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkgconfig ];
 
   # libsrtp.pc references -lcrypto -lpcap without -L
   propagatedBuildInputs = [ openssl libpcap ];
@@ -22,6 +22,8 @@ stdenv.mkDerivation rec {
   configureFlags = [
     "--disable-debug"
   ] ++ optional (openssl != null) "--enable-openssl";
+
+  buildFlags = [ "shared_library" ];
 
   postInstall = ''
     rm -rf $out/bin

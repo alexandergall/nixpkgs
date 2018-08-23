@@ -1,28 +1,45 @@
-{ lib, stdenv, fetchurl, libgpgerror, enableCapabilities ? false, libcap }:
+{ stdenv, fetchurl, gettext, libgpgerror, enableCapabilities ? false, libcap
+, buildPackages
+}:
 
 assert enableCapabilities -> stdenv.isLinux;
 
 stdenv.mkDerivation rec {
-  name = "libgcrypt-1.6.5";
+  name = "libgcrypt-${version}";
+  version = "1.8.2";
 
   src = fetchurl {
     url = "mirror://gnupg/libgcrypt/${name}.tar.bz2";
-    sha256 = "0959mwfzsxhallxdqlw359xg180ll2skxwyy35qawmfl89cbr7pl";
+    sha256 = "01sca9m8hm6b5v8hmqsfdjhyz013869p1f0fxw9ln52qfnp4q1n8";
   };
 
-  outputs = [ "dev" "out" "info" ];
+  outputs = [ "out" "dev" "info" ];
   outputBin = "dev";
 
-  buildInputs =
-    [ libgpgerror ]
-    ++ lib.optional enableCapabilities libcap;
+  # The CPU Jitter random number generator must not be compiled with
+  # optimizations and the optimize -O0 pragma only works for gcc.
+  # The build enables -O2 by default for everything else.
+  hardeningDisable = stdenv.lib.optional stdenv.cc.isClang "fortify";
+
+  depsBuildBuild = stdenv.lib.optional stdenv.isCross buildPackages.stdenv.cc;
+
+  buildInputs = [ libgpgerror ]
+    ++ stdenv.lib.optional stdenv.isDarwin gettext
+    ++ stdenv.lib.optional enableCapabilities libcap;
+
+  preConfigure = if stdenv.isCross then ''
+    # This is intentional: gpg-error-config is a shell script that will work during the build
+    mkdir -p "$NIX_BUILD_TOP"/bin
+    ln -s ${libgpgerror.dev}/bin/gpg-error-config "$NIX_BUILD_TOP/bin"
+    export PATH="$NIX_BUILD_TOP/bin:$PATH"
+  '' else null;
 
   # Make sure libraries are correct for .pc and .la files
   # Also make sure includes are fixed for callers who don't use libgpgcrypt-config
   postFixup = ''
     sed -i 's,#include <gpg-error.h>,#include "${libgpgerror.dev}/include/gpg-error.h",g' "$dev/include/gcrypt.h"
   '' + stdenv.lib.optionalString enableCapabilities ''
-    sed -i 's,\(-lcap\),-L${libcap.out}/lib \1,' $out/lib/libgcrypt.la
+    sed -i 's,\(-lcap\),-L${libcap.lib}/lib \1,' $out/lib/libgcrypt.la
   '';
 
   # TODO: figure out why this is even necessary and why the missing dylib only crashes
@@ -34,12 +51,12 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = https://www.gnu.org/software/libgcrypt/;
-    description = "General-pupose cryptographic library";
-    license = lib.licenses.lgpl2Plus;
-    platforms = lib.platforms.all;
-    maintainers = [ lib.maintainers.wkennington ];
+    description = "General-purpose cryptographic library";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.all;
+    maintainers = [ maintainers.wkennington maintainers.vrthra ];
     repositories.git = git://git.gnupg.org/libgcrypt.git;
   };
 }

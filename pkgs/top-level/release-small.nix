@@ -1,8 +1,8 @@
 /* A small release file, with few packages to be built.  The aim is to reduce
    the load on Hydra when testing the `stdenv-updates' branch. */
 
-{ nixpkgs ? { outPath = (import ./../.. {}).lib.cleanSource ../..; revCount = 1234; shortRev = "abcdef"; }
-, supportedSystems ? [ "x86_64-linux" "i686-linux" "x86_64-darwin" ]
+{ nixpkgs ? { outPath = (import ../../lib).cleanSource ../..; revCount = 1234; shortRev = "abcdef"; }
+, supportedSystems ? [ "x86_64-linux" "x86_64-darwin" ]
 }:
 
 with import ./release-lib.nix { inherit supportedSystems; };
@@ -19,7 +19,6 @@ with import ./release-lib.nix { inherit supportedSystems; };
   aspell = all;
   at = linux;
   atlas = linux;
-  aterm25 = all;
   autoconf = all;
   automake = all;
   avahi = allBut cygwin;  # Cygwin builds fail
@@ -36,10 +35,11 @@ with import ./release-lib.nix { inherit supportedSystems; };
   cpio = all;
   cron = linux;
   cups = linux;
+  dbus = linux;
   dhcp = linux;
   diffutils = all;
   e2fsprogs = linux;
-  emacs24 = gtkSupported;
+  emacs25 = gtkSupported;
   enscript = all;
   file = all;
   findutils = all;
@@ -68,7 +68,7 @@ with import ./release-lib.nix { inherit supportedSystems; };
   hdparm = linux;
   hello = all;
   host = linux;
-  iana_etc = linux;
+  iana-etc = linux;
   icewm = linux;
   idutils = all;
   inetutils = linux;
@@ -105,7 +105,6 @@ with import ./release-lib.nix { inherit supportedSystems; };
   mingetty = linux;
   mk = linux;
   mktemp = all;
-  module_init_tools = linux;
   mono = linux;
   monotone = linux;
   mpg321 = linux;
@@ -128,13 +127,12 @@ with import ./release-lib.nix { inherit supportedSystems; };
   perl = all;
   pkgconfig = all;
   pmccabe = linux;
-  portmap = linux;
   procps = linux;
   python = allBut cygwin;
-  pythonFull = linux;
   readline = all;
   rlwrap = all;
   rpm = linux;
+  rpcbind = linux;
   rsync = linux;
   screen = linux ++ darwin;
   scrot = linux;
@@ -155,16 +153,12 @@ with import ./release-lib.nix { inherit supportedSystems; };
   sysvtools = linux;
   tcl = linux;
   tcpdump = linux;
-  texLive = linux;
-  texLiveBeamer = linux;
-  texLiveExtra = linux;
   texinfo = all;
   time = linux;
   tinycc = linux;
   udev = linux;
-  unrar = linux;
+  unar = linux;
   unzip = all;
-  upstart = linux;
   usbutils = linux;
   utillinux = linux;
   utillinuxMinimal = linux;
@@ -180,11 +174,5 @@ with import ./release-lib.nix { inherit supportedSystems; };
   xkeyboard_config = linux;
   zile = linux;
   zip = all;
-
-  dbus = {
-    libs = linux;
-    daemon = linux;
-    tools = linux;
-  };
 
 } ))

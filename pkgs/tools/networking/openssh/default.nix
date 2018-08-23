@@ -1,53 +1,67 @@
-{ stdenv, fetchurl, fetchpatch, zlib, openssl, perl, libedit, pkgconfig, pam
+{ stdenv, fetchurl, fetchpatch, zlib, openssl, perl, libedit, pkgconfig, pam, autoreconfHook
 , etcDir ? null
 , hpnSupport ? false
-, withKerberos ? false
+, withKerberos ? true
 , withGssapiPatches ? false
 , kerberos
 , linkOpenssl? true
 }:
 
-assert withKerberos -> kerberos != null;
-assert withGssapiPatches -> withKerberos;
-
 let
 
-  hpnSrc = fetchurl {
-    url = mirror://sourceforge/hpnssh/openssh-6.6p1-hpnssh14v5.diff.gz;
-    sha256 = "682b4a6880d224ee0b7447241b684330b731018585f1ba519f46660c10d63950";
-  };
-
-  gssapiSrc = fetchpatch {
-    url = "https://anonscm.debian.org/cgit/pkg-ssh/openssh.git/plain/debian/patches/gssapi.patch?id=46961f5704f8e86cea3e99253faad55aef4d8f35";
-    sha256 = "01mf2vx1gavypbdx06mcbmcrkm2smff0h3jfmr61k6h6j3xk88y5";
+  # **please** update this patch when you update to a new openssh release.
+  gssapiPatch = fetchpatch {
+    name = "openssh-gssapi.patch";
+    url = "https://anonscm.debian.org/cgit/pkg-ssh/openssh.git/plain/debian"
+        + "/patches/gssapi.patch?id=1e0d55f9163793742d20eaadd4784db16fd3459d";
+    sha256 = "130phj87q87p9crigd6852nnaqsqkfg09h45a32lk4524h9kkxgb";
   };
 
 in
 with stdenv.lib;
 stdenv.mkDerivation rec {
-  # Please ensure that openssh_with_kerberos still builds when
-  # bumping the version here!
-  name = "openssh-7.2p2";
+  name = "openssh-${version}";
+  version = if hpnSupport then "7.5p1" else "7.6p1";
 
-  src = fetchurl {
-    url = "mirror://openbsd/OpenSSH/portable/${name}.tar.gz";
-    sha256 = "132lh9aanb0wkisji1d6cmsxi520m8nh7c7i9wi6m1s3l38q29x7";
-  };
-
-  prePatch = optionalString hpnSupport
-    ''
-      gunzip -c ${hpnSrc} | patch -p1
-      export NIX_LDFLAGS="$NIX_LDFLAGS -lgcc_s"
-    '';
+  src = if hpnSupport then
+      fetchurl {
+        url = "https://github.com/rapier1/openssh-portable/archive/hpn-KitchenSink-7_5_P1.tar.gz";
+        sha256 = "1hasdcfjl6xf5nbbbvqyyq5v7ad10nywrq89j7naxz9wln58nhnn";
+      }
+    else
+      fetchurl {
+        url = "mirror://openbsd/OpenSSH/portable/${name}.tar.gz";
+        sha256 = "08qpsb8mrzcx8wgvz9insiyvq7sbg26yj5nvl2m5n57yvppcl8x3";
+      };
 
   patches =
-    [ ./locale_archive.patch
+    [
+      ./locale_archive.patch
       ./fix-host-key-algorithms-plus.patch
-    ]
-    ++ optional withGssapiPatches gssapiSrc;
 
-  buildInputs = [ zlib openssl libedit pkgconfig pam ]
-    ++ optional withKerberos [ kerberos ];
+      # See discussion in https://github.com/NixOS/nixpkgs/pull/16966
+      ./dont_create_privsep_path.patch
+    ]
+    ++ optional withGssapiPatches (assert withKerberos; gssapiPatch);
+
+  postPatch =
+    # On Hydra this makes installation fail (sometimes?),
+    # and nix store doesn't allow such fancy permission bits anyway.
+    ''
+      substituteInPlace Makefile.in --replace '$(INSTALL) -m 4711' '$(INSTALL) -m 0711'
+    '';
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ zlib openssl libedit pam ]
+    ++ optional withKerberos kerberos
+    ++ optional hpnSupport autoreconfHook
+    ;
+
+  preConfigure = ''
+    # Setting LD causes `configure' and `make' to disagree about which linker
+    # to use: `configure' wants `gcc', but `make' wants `ld'.
+    unset LD
+  '';
 
   # I set --disable-strip because later we strip anyway. And it fails to strip
   # properly when cross building.
@@ -60,16 +74,13 @@ stdenv.mkDerivation rec {
     "--disable-strip"
     (if pam != null then "--with-pam" else "--without-pam")
   ] ++ optional (etcDir != null) "--sysconfdir=${etcDir}"
-    ++ optional withKerberos "--with-kerberos5=${kerberos}"
+    ++ optional withKerberos (assert kerberos != null; "--with-kerberos5=${kerberos}")
     ++ optional stdenv.isDarwin "--disable-libutil"
     ++ optional (!linkOpenssl) "--without-openssl";
 
-  preConfigure = ''
-    configureFlagsArray+=("--with-privsep-path=$out/empty")
-    mkdir -p $out/empty
-  '';
-
   enableParallelBuilding = true;
+
+  hardeningEnable = [ "pie" ];
 
   postInstall = ''
     # Install ssh-copy-id, it's very useful.
@@ -84,11 +95,10 @@ stdenv.mkDerivation rec {
   ];
 
   meta = {
-    homepage = "http://www.openssh.com/";
+    homepage = http://www.openssh.com/;
     description = "An implementation of the SSH protocol";
     license = stdenv.lib.licenses.bsd2;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ eelco ];
-    broken = hpnSupport; # probably after 6.7 update
+    maintainers = with maintainers; [ eelco aneeshusa ];
   };
 }

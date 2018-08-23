@@ -1,44 +1,50 @@
-{ stdenv, lib, bundler, fetchFromGitHub, bundlerEnv, libiconv, ruby
-, tzdata, git, nodejs, procps
+{ pkgs, stdenv, lib, bundler, fetchurl, fetchFromGitHub, bundlerEnv, libiconv
+, ruby, tzdata, git, procps, dpkg, nettools
 }:
 
 /* When updating the Gemfile add `gem "activerecord-nulldb-adapter"`
    to allow building the assets without a database */
 
 let
-  env = bundlerEnv {
-    name = "gitlab";
+  rubyEnv = bundlerEnv {
+    name = "gitlab-env-${version}";
     inherit ruby;
-    gemfile = ./Gemfile;
-    lockfile = ./Gemfile.lock;
-    gemset = ./gemset.nix;
+    gemdir = ./.;
     meta = with lib; {
       homepage = http://www.gitlab.com/;
       platforms = platforms.linux;
-      maintainers = [ ];
+      maintainers = with maintainers; [ fpletz globin ];
       license = licenses.mit;
     };
+  };
+
+  version = "10.3.4";
+
+  gitlabDeb = fetchurl {
+    url = "https://packages.gitlab.com/gitlab/gitlab-ce/packages/debian/jessie/gitlab-ce_${version}-ce.0_amd64.deb/download";
+    sha256 = "0b6508hcahvhfpxyrqs05kz9a7c1wv658asm6a7ccish6hnwcica";
   };
 
 in
 
 stdenv.mkDerivation rec {
   name = "gitlab-${version}";
-  version = "8.5.7";
-
-  buildInputs = [ ruby bundler tzdata git nodejs procps ];
 
   src = fetchFromGitHub {
     owner = "gitlabhq";
     repo = "gitlabhq";
     rev = "v${version}";
-    sha256 = "0n76dafndhp0rwnnvf12zby9xap5fhcplld86pq2wyvqabg4s9yj";
+    sha256 = "0cvp4wwkc04qffsq738867j31igwzj7zlmahdl24yddbmpa5x8r1";
   };
+
+  buildInputs = [
+    rubyEnv ruby bundler tzdata git procps dpkg nettools
+  ];
 
   patches = [
     ./remove-hardcoded-locations.patch
-    ./disable-dump-schema-after-migration.patch
     ./nulladapter.patch
+    ./fix-36783.patch
   ];
 
   postPatch = ''
@@ -66,22 +72,38 @@ stdenv.mkDerivation rec {
   '';
 
   buildPhase = ''
-    export GEM_HOME=${env}/${ruby.gemPath}
     mv config/gitlab.yml.example config/gitlab.yml
-    GITLAB_DATABASE_ADAPTER=nulldb bundle exec rake assets:precompile RAILS_ENV=production
+
+    # work around unpacking deb containing binary with suid bit
+    ar p ${gitlabDeb} data.tar.gz | gunzip > gitlab-deb-data.tar
+    tar -f gitlab-deb-data.tar --delete ./opt/gitlab/embedded/bin/ksu
+    tar -xf gitlab-deb-data.tar
+
+    mv -v opt/gitlab/embedded/service/gitlab-rails/public/assets public
+    rm -rf opt
+
     mv config/gitlab.yml config/gitlab.yml.example
+    rm -f config/secrets.yml
     mv config config.dist
   '';
 
   installPhase = ''
+    rm -r tmp
     mkdir -p $out/share
     cp -r . $out/share/gitlab
+    rm -rf $out/share/gitlab/log
+    ln -sf /run/gitlab/log $out/share/gitlab/log
     ln -sf /run/gitlab/uploads $out/share/gitlab/public/uploads
     ln -sf /run/gitlab/config $out/share/gitlab/config
+    ln -sf /run/gitlab/tmp $out/share/gitlab/tmp
+
+    # rake tasks to mitigate CVE-2017-0882
+    # see https://about.gitlab.com/2017/03/20/gitlab-8-dot-17-dot-4-security-release/
+    cp ${./reset_token.rake} $out/share/gitlab/lib/tasks/reset_token.rake
   '';
 
   passthru = {
-    inherit env;
+    inherit rubyEnv;
     inherit ruby;
   };
 }

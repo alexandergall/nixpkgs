@@ -1,4 +1,4 @@
-{ stdenv, gmp, gnum4
+{ stdenv, buildPackages, gmp, gnum4
 
 # Version specific args
 , version, src
@@ -9,10 +9,11 @@ stdenv.mkDerivation (rec {
 
   inherit src;
 
-  outputs = [ "dev" "out" ];
+  outputs = [ "out" "dev" ];
   outputBin = "dev";
 
-  buildInputs = [ gnum4 ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ gnum4 ];
   propagatedBuildInputs = [ gmp ];
 
   doCheck = (stdenv.system != "i686-cygwin" && !stdenv.isDarwin);

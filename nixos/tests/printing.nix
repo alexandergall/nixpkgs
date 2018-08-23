@@ -3,7 +3,7 @@
 import ./make-test.nix ({pkgs, ... }: {
   name = "printing";
   meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ iElectric eelco chaoflow jgeerds ];
+    maintainers = [ domenkozar eelco chaoflow jgeerds ];
   };
 
   nodes = {
@@ -39,7 +39,7 @@ import ./make-test.nix ({pkgs, ... }: {
       $client->waitForUnit("cups.service");
       $client->sleep(10); # wait until cups is fully initialized
       $client->succeed("lpstat -r") =~ /scheduler is running/ or die;
-      $client->succeed("lpstat -H") =~ "/var/run/cups/cups.sock" or die;
+      $client->succeed("lpstat -H") =~ "localhost:631" or die;
       $client->succeed("curl --fail http://localhost:631/");
       $client->succeed("curl --fail http://server:631/");
       $server->fail("curl --fail --connect-timeout 2  http://client:631/");
@@ -62,7 +62,7 @@ import ./make-test.nix ({pkgs, ... }: {
       # Test printing various file types.
       foreach my $file ("${pkgs.groff.doc}/share/doc/*/examples/mom/penguin.pdf",
                         "${pkgs.groff.doc}/share/doc/*/meref.ps",
-                        "${pkgs.cups}/share/doc/cups/images/cups.png",
+                        "${pkgs.cups.out}/share/doc/cups/images/cups.png",
                         "${pkgs.pcre.doc}/share/doc/pcre/pcre.txt")
       {
           $file =~ /([^\/]*)$/; my $fn = $1;

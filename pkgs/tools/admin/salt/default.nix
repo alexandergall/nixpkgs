@@ -1,23 +1,22 @@
 {
-  stdenv, fetchurl, pythonPackages, openssl,
+  stdenv, python2Packages, openssl,
 
   # Many Salt modules require various Python modules to be installed,
   # passing them in this array enables Salt to find them.
   extraInputs ? []
 }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "salt-${version}";
-  version = "2015.8.8";
+python2Packages.buildPythonApplication rec {
+  pname = "salt";
+  version = "2017.7.2";
+  name = "${pname}-${version}";
 
-  disabled = pythonPackages.isPy3k;
-
-  src = fetchurl {
-    url = "https://pypi.python.org/packages/source/s/salt/${name}.tar.gz";
-    sha256 = "1xcfcs50pyammb60myph4f8bi2r6iwkxwsnnhrjwvkv2ymxwxv5j";
+  src = python2Packages.fetchPypi {
+    inherit pname version;
+    sha256 = "0h18zwp1w90rgxpmqgrmn9wp31h03f0vak8lpnnbh0dzbbgcffzz";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
+  propagatedBuildInputs = with python2Packages; [
     futures
     jinja2
     markupsafe
@@ -26,7 +25,6 @@ pythonPackages.buildPythonApplication rec {
     pyyaml
     pyzmq
     requests
-    salttesting
     tornado
   ] ++ extraInputs;
 
@@ -34,7 +32,7 @@ pythonPackages.buildPythonApplication rec {
 
   postPatch = ''
     substituteInPlace "salt/utils/rsax931.py" \
-      --subst-var-by "libcrypto" "${openssl}/lib/libcrypto.so"
+      --subst-var-by "libcrypto" "${openssl.out}/lib/libcrypto.so"
   '';
 
   # The tests fail due to socket path length limits at the very least;

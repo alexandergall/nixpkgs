@@ -1,54 +1,55 @@
-{ stdenv, fetchgit, makeDesktopItem, pkgconfig, ffmpeg, mesa, nvidia_cg_toolkit
-, freetype, libxml2, libv4l, coreutils, python34, which, udev, alsaLib
-, libX11, libXext, libXxf86vm, libXdmcp, SDL, libpulseaudio ? null }:
+{ stdenv, fetchFromGitHub, which, pkgconfig, makeWrapper
+, ffmpeg, libGLU_combined, freetype, libxml2, python34
+, libobjc, AppKit, Foundation
+, alsaLib ? null
+, libpulseaudio ? null
+, libv4l ? null
+, libX11 ? null
+, libXdmcp ? null
+, libXext ? null
+, libXxf86vm ? null
+, SDL2 ? null
+, udev ? null
+, enableNvidiaCgToolkit ? false, nvidia_cg_toolkit ? null
+, withVulkan ? stdenv.isLinux, vulkan-loader ? null
+}:
 
-let
-  desktopItem = makeDesktopItem {
-    name = "retroarch";
-    exec = "retroarch";
-    icon = "retroarch";
-    comment = "Multi-Engine Platform";
-    desktopName = "RetroArch";
-    genericName = "Libretro Frontend";    
-    categories = "Game;Emulator;";
-    #keywords = "multi;engine;emulator;xmb;";
-  };
-  
-in
+with stdenv.lib;
 
 stdenv.mkDerivation rec {
   name = "retroarch-bare-${version}";
-  version = "2015-11-20";
+  version = "1.7.1";
 
-  src = fetchgit {
-    url = https://github.com/libretro/RetroArch.git;
-    rev = "09dda14549fc13231311fd522a07a75e923889aa";
-    sha256 = "1f7w4i0idc4n0sqc5pcrsxsljk3f614sfdqhdgjb1l4xj16g37cg";
+  src = fetchFromGitHub {
+    owner = "libretro";
+    repo = "RetroArch";
+    sha256 = "0qv8ci76f5kwv5b49ijgpc6jdfp6sm21fw5hq06mq6ygyiy9vdzf";
+    rev = "v${version}";
   };
 
-  buildInputs = [ pkgconfig ffmpeg mesa nvidia_cg_toolkit freetype libxml2 libv4l coreutils
-                  python34 which udev alsaLib libX11 libXext libXxf86vm libXdmcp SDL libpulseaudio ];
+  nativeBuildInputs = [ pkgconfig ]
+                      ++ optional withVulkan [ makeWrapper ];
 
-  patchPhase = ''
-    export GLOBAL_CONFIG_DIR=$out/etc
-    sed -e 's#/bin/true#${coreutils}/bin/true#' -i qb/qb.libs.sh
-  '';
-
-  postInstall = ''
-    mkdir -p $out/share/icons/hicolor/scalable/apps
-    cp -p -T ./media/retroarch.svg $out/share/icons/hicolor/scalable/apps/retroarch.svg
-
-    mkdir -p "$out/share/applications"
-    cp ${desktopItem}/share/applications/* $out/share/applications
-  '';
+  buildInputs = [ ffmpeg freetype libxml2 libGLU_combined python34 SDL2 which ]
+                ++ optional enableNvidiaCgToolkit nvidia_cg_toolkit
+                ++ optional withVulkan [ vulkan-loader ]
+                ++ optionals stdenv.isDarwin [ libobjc AppKit Foundation ]
+                ++ optionals stdenv.isLinux [ alsaLib libpulseaudio libv4l libX11
+                                              libXdmcp libXext libXxf86vm udev ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://libretro.org/;
+  postInstall = optional withVulkan ''
+    wrapProgram $out/bin/retroarch --prefix LD_LIBRARY_PATH ':' ${vulkan-loader}/lib
+  '';
+
+  preFixup = "rm $out/bin/retroarch-cg2glsl";
+
+  meta = {
+    homepage = https://libretro.com;
     description = "Multi-platform emulator frontend for libretro cores";
     license = licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with maintainers; [ MP2E edwtjo ];
+    platforms = platforms.all;
+    maintainers = with maintainers; [ MP2E edwtjo matthewbauer ];
   };
 }

@@ -1,32 +1,23 @@
-{stdenv, fetchurl, ocaml, findlib, opam, xmlm}:
+{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, xmlm, topkg }:
+
 let
   pname = "uucd";
-  version = "2.0.0";
   webpage = "http://erratique.ch/software/${pname}";
-  ocaml_version = (builtins.parseDrvName ocaml.name).version;
 in
 stdenv.mkDerivation rec {
-
   name = "ocaml-${pname}-${version}";
+  version = "10.0.0";
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "12lbrrdjwdxfa99pbg344dfkj51lr5d2ispcj7d7lwsqyxy6h57i";
+    sha256 = "0cdyg6vaic4n58w80qriwvaq1c40ng3fh74ilxrwajbq163k055q";
   };
 
-  buildInputs = [ ocaml findlib opam xmlm ];
-
-  createFindlibDestdir = true;
+  buildInputs = [ ocaml findlib ocamlbuild topkg ];
 
   unpackCmd = "tar xjf $src";
 
-  buildPhase = "ocaml ./pkg/build.ml native=true native-dynlink=true";
-
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install > install.sh
-    sh install.sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${ocaml_version}/site-lib/
-  '';
+  inherit (topkg) buildPhase installPhase;
 
   propagatedBuildInputs = [ xmlm ];
 

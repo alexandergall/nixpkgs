@@ -1,15 +1,15 @@
-{ stdenv, fetchFromGitHub, buildPythonApplication, makeWrapper, ffmpeg }:
+{ stdenv, lib, fetchFromGitHub, pythonPackages, makeWrapper, ffmpeg_3 }:
 
-buildPythonApplication rec {
+pythonPackages.buildPythonApplication rec {
 
   name = "togglesg-download-git-${version}";
-  version = "2016-02-08";
+  version = "2017-12-07";
 
   src = fetchFromGitHub {
-    owner = "0x776b7364";
-    repo = "toggle.sg-download";
-    rev = "5cac3ec039d67ad29240b2fa850a8db595264e3d";
-    sha256 = "0pqw73aa5b18d5ws4zj6gcmzap6ag526jrylqq80m0yyh9yxw5hs";
+    owner  = "0x776b7364";
+    repo   = "toggle.sg-download";
+    rev    = "e64959f99ac48920249987a644eefceee923282f";
+    sha256 = "0j317wmyzpwfcixjkybbq2vkg52vij21bs40zg3n1bs61rgmzrn8";
   };
 
   nativeBuildInputs = [ makeWrapper ];
@@ -19,15 +19,20 @@ buildPythonApplication rec {
   dontStrip = true;
 
   installPhase = ''
-    mkdir -p $out/bin
-    install -m755 download_toggle_video2.py $out/bin/download_toggle_video2.py
+    runHook preInstall
+
+    mkdir -p $out/{bin,share/doc/togglesg-download}
+    substitute $src/download_toggle_video2.py $out/bin/download_toggle_video2.py \
+      --replace "ffmpeg_download_cmd = 'ffmpeg" "ffmpeg_download_cmd = '${lib.getBin ffmpeg_3}/bin/ffmpeg"
+    chmod 0755 $out/bin/download_toggle_video2.py
+
+    cp LICENSE README.md $out/share/doc/togglesg-download
+
+    runHook postInstall
   '';
 
-  postInstall = stdenv.lib.optionalString (ffmpeg != null)
-    ''wrapProgram $out/bin/download_toggle_video2.py --prefix PATH : "${ffmpeg}/bin"'';
-
   meta = with stdenv.lib; {
-    homepage = "https://github.com/0x776b7364/toggle.sg-download";
+    homepage = https://github.com/0x776b7364/toggle.sg-download;
     description = "Command-line tool to download videos from toggle.sg written in Python";
     longDescription = ''
       toggle.sg requires SilverLight in order to view videos. This tool will
@@ -35,7 +40,7 @@ buildPythonApplication rec {
       on your OS of choice.
     '';
     license = licenses.mit;
+    maintainers = with maintainers; [ peterhoeg ];
     platforms = platforms.all;
-    maintainers = [ maintainers.peterhoeg ];
   };
 }

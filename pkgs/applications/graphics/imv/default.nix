@@ -1,16 +1,16 @@
-{ stdenv, fetchgit, SDL2, SDL2_ttf, freeimage }:
+{ stdenv, fetchgit, SDL2, SDL2_ttf, freeimage, fontconfig }:
 
 stdenv.mkDerivation rec {
   name = "imv-${version}";
-  version = "2.0.0";
+  version = "2.1.3";
 
   src = fetchgit {
     url = "https://github.com/eXeC64/imv.git";
-    rev = "bc90a0adcc5b22d2bf0158333eb6dfb34c402d48";
-    sha256 = "1bzx57d9mcxw9s72pdbdbwq9pns946jl6p2g881z43w68gimlpw7";
+    rev = "e59d0e9e120f1dbde9ab068748a190e93978e5b7";
+    sha256 = "0j48dk1bcbh5541522qkn487637wcx104zckrnxa5g3nirfqa7r7";
   };
 
-  buildInputs = [ SDL2 SDL2_ttf freeimage ];
+  buildInputs = [ SDL2 SDL2_ttf freeimage fontconfig ];
 
   configurePhase = "substituteInPlace Makefile --replace /usr $out";
 

@@ -1,38 +1,36 @@
 { stdenv, fetchFromGitHub, qt4, openscenegraph, mygui, bullet, ffmpeg, boost, cmake, SDL2, unshield, openal
-, giflib, pkgconfig }:
+, giflib, libXt, pkgconfig }:
 
 let
-  openscenegraph_ = openscenegraph.override {
-    inherit ffmpeg giflib;
-    withApps = false;
-  };
-  openscenegraph__ = openscenegraph_.overrideDerivation (self: {
+  openscenegraph_ = openscenegraph.overrideDerivation (self: {
     src = fetchFromGitHub {
       owner = "OpenMW";
       repo = "osg";
-      rev = "a72f43de6e1e4a8191643acb26c3e7138f833798";
-      sha256 = "04x2pjfrdz1kaj4i34zpzrmkk018jnr84rb6z646cz5fin3dapyh";
+      rev = "2b4c8e37268e595b82da4b9aadd5507852569b87";
+      sha256 = "0admnllxic6dcpic0h100927yw766ab55dix002vvdx36i6994jb";
     };
   });
 in stdenv.mkDerivation rec {
-  version = "0.38.0";
+  version = "0.43.0";
   name = "openmw-${version}";
 
   src = fetchFromGitHub {
     owner = "OpenMW";
     repo = "openmw";
     rev = name;
-    sha256 = "1ssz1pa59a34v5vxiccqyvij5s38kl662p7xbc59y90y668f78y6";
+    sha256 = "0lj8v81hk807dy0wcdhfp0iyn4l5yag53hx1a6xm44gh2dpyil43";
   };
 
   enableParallelBuilding = true;
 
-  buildInputs = [ cmake boost ffmpeg qt4 bullet mygui openscenegraph__ SDL2 unshield openal pkgconfig ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ cmake boost ffmpeg qt4 bullet mygui openscenegraph_ SDL2 unshield openal libXt ];
 
   meta = with stdenv.lib; {
     description = "An unofficial open source engine reimplementation of the game Morrowind";
-    homepage = "http://openmw.org";
+    homepage = http://openmw.org;
     license = licenses.gpl3;
     platforms = platforms.linux;
+    maintainers = with maintainers; [ abbradar ];
   };
 }

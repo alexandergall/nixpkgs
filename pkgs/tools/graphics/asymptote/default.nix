@@ -1,26 +1,29 @@
 {stdenv, fetchurl
   , freeglut, ghostscriptX, imagemagick, fftw 
-  , boehmgc, mesa_glu, mesa_noglu, ncurses, readline, gsl, libsigsegv
+  , boehmgc, libGLU, libGL, mesa_noglu, ncurses, readline, gsl, libsigsegv
   , python, zlib, perl, texLive, texinfo, xz
+, darwin
 }:
-
-assert stdenv.isLinux;
 
 let
   s = # Generated upstream information
   rec {
     baseName="asymptote";
-    version="2.36";
+    version="2.41";
     name="${baseName}-${version}";
-    hash="0l0pznrn4k3v07cmn5rx8nq088zjs9bv2mkcks65z5lqlk5pccnd";
-    url="mirror://sourceforge/project/asymptote/2.36/asymptote-2.36.src.tgz";
-    sha256="0l0pznrn4k3v07cmn5rx8nq088zjs9bv2mkcks65z5lqlk5pccnd";
+    hash="1w7fbq6gy65g0mxg6wdxi7v178c5yxvh9yrnv3bzm4sjzf4pwvhx";
+    url="https://freefr.dl.sourceforge.net/project/asymptote/2.41/asymptote-2.41.src.tgz";
+    sha256="1w7fbq6gy65g0mxg6wdxi7v178c5yxvh9yrnv3bzm4sjzf4pwvhx";
   };
   buildInputs = [
-   freeglut ghostscriptX imagemagick fftw 
-   boehmgc mesa_glu mesa_noglu mesa_noglu.osmesa ncurses readline gsl libsigsegv
-   python zlib perl texLive texinfo xz
-  ];
+   ghostscriptX imagemagick fftw
+   boehmgc ncurses readline gsl libsigsegv
+   python zlib perl texLive texinfo xz ]
+   ++ stdenv.lib.optionals stdenv.isLinux
+     [ freeglut libGLU libGL mesa_noglu.osmesa ]
+   ++ stdenv.lib.optionals stdenv.isDarwin
+     (with darwin.apple_sdk.frameworks; [ OpenGL GLUT Cocoa ])
+   ;
 in
 stdenv.mkDerivation {
   inherit (s) name version;
@@ -40,22 +43,24 @@ stdenv.mkDerivation {
     configureFlags="$configureFlags --with-latex=$out/share/texmf/tex/latex --with-context=$out/share/texmf/tex/context/third"
   '';
 
-  NIX_CFLAGS_COMPILE = [ "-I${boehmgc}/include/gc" ];
+  NIX_CFLAGS_COMPILE = [ "-I${boehmgc.dev}/include/gc" ];
 
   postInstall = ''
     mv -v "$out/share/info/asymptote/"*.info $out/share/info/
     sed -i -e 's|(asymptote/asymptote)|(asymptote)|' $out/share/info/asymptote.info
     rmdir $out/share/info/asymptote
     rm $out/share/info/dir
+
+    rm -rf "$out"/share/texmf
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with stdenv.lib; {
     inherit (s) version;
     description =  "A tool for programming graphics intended to replace Metapost";
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = [stdenv.lib.maintainers.raskin stdenv.lib.maintainers.simons];
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.gpl3Plus;
+    maintainers = [ maintainers.raskin maintainers.peti ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

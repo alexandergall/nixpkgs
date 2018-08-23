@@ -1,12 +1,12 @@
 { pkgs, stdenv, eggDerivation, fetchegg }:
 rec {
   aes = eggDerivation {
-    name = "aes-1.3";
+    name = "aes-1.5";
 
     src = fetchegg {
       name = "aes";
-      version = "1.3";
-      sha256 = "0zhkqdms2f9if1j5v8myay2mfiislvpj3bcqawb4s4dw0qcp20kb";
+      version = "1.5";
+      sha256 = "0gjlvz5nk0fnaclljpyfk21rkf0nidjj6wcv3jbnpmfafgjny5fi";
     };
 
     buildInputs = [
@@ -294,12 +294,12 @@ rec {
   };
 
   ssql = eggDerivation {
-    name = "ssql-0.2.2";
+    name = "ssql-0.2.4";
 
     src = fetchegg {
       name = "ssql";
-      version = "0.2.2";
-      sha256 = "10557ymy0fgvqqazsg2jsbqvng0b91jqcjfgsxkrq8xs3klyd5mf";
+      version = "0.2.4";
+      sha256 = "0qhnghhx1wrvav4s7l780mspwlh8s6kzq4bl0cslwp1km90fx9bk";
     };
 
     buildInputs = [

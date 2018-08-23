@@ -17,7 +17,7 @@ stdenv.mkDerivation rec {
   postPatch = ''
     for i in squeak.in squeak.sh.in; do
       substituteInPlace unix/cmake/$i --replace "PATH=" \
-        "PATH=${coreutils}/bin:${gnused}/bin:${which}/bin #"
+        "PATH=${stdenv.lib.makeBinPath [ coreutils gnused which ]} #"
     done
   '';
 
@@ -26,6 +26,8 @@ stdenv.mkDerivation rec {
   '';
 
   enableParallelBuilding = true;
+
+  hardeningDisable = [ "format" ];
 
   meta = with stdenv.lib; {
     description = "Smalltalk programming language and environment";
@@ -41,6 +43,5 @@ stdenv.mkDerivation rec {
     downloadPage = http://squeakvm.org/unix/index.html;
     license = with licenses; [ asl20 mit ];
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

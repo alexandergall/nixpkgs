@@ -1,10 +1,10 @@
-{ stdenv, fetchurl, autoreconfHook, talloc
+{ stdenv, fetchurl, autoreconfHook, talloc, finger_bsd, perl
 , openssl
 , linkOpenssl? true
 , openldap
-, withLdap ? false
+, withLdap ? true
 , sqlite
-, withSqlite ? false
+, withSqlite ? true
 , libpcap
 , withPcap ? true
 , libcap
@@ -13,8 +13,9 @@
 , withMemcached ? false
 , hiredis
 , withRedis ? false
-, libmysql
+, mysql
 , withMysql ? false
+, json_c
 , withJson ? false
 , libyubikey
 , withYubikey ? false
@@ -28,7 +29,7 @@ assert withPcap -> libpcap != null;
 assert withCap -> libcap != null;
 assert withMemcached -> libmemcached != null;
 assert withRedis -> hiredis != null;
-assert withMysql -> libmysql != null;
+assert withMysql -> mysql != null;
 assert withYubikey -> libyubikey != null;
 assert withCollectd -> collectd != null;
 
@@ -39,42 +40,47 @@ assert withCollectd -> collectd != null;
 with stdenv.lib;
 stdenv.mkDerivation rec {
   name = "freeradius-${version}";
-  version = "3.0.11";
+  version = "3.0.16";
 
-  buildInputs = [ autoreconfHook openssl talloc ]
-    ++ optional withLdap [ openldap ]
-    ++ optional withSqlite [ sqlite ]
-    ++ optional withPcap [ libpcap ]
-    ++ optional withCap [ libcap ]
-    ++ optional withMemcached [ libmemcached ]
-    ++ optional withRedis [ hiredis ]
-    ++ optional withMysql [ libmysql ]
-    ++ optional withJson [ pkgs."json-c" ]
-    ++ optional withYubikey [ libyubikey ]
-    ++ optional withCollectd [ collectd ];
+  src = fetchurl {
+    url = "ftp://ftp.freeradius.org/pub/freeradius/freeradius-server-${version}.tar.gz";
+    sha256 = "062dw4ckaa7k2br16l3naz9dr7hvzqhpxdwam3klq1i44v4hvl1b";
+  };
 
-  # NOTE: are the --with-{lib}-lib-dir and --with-{lib}-include-dir necessary with buildInputs ?
+  nativeBuildInputs = [ autoreconfHook ];
+
+  buildInputs = [ openssl talloc finger_bsd perl ]
+    ++ optional withLdap openldap
+    ++ optional withSqlite sqlite
+    ++ optional withPcap libpcap
+    ++ optional withCap libcap
+    ++ optional withMemcached libmemcached
+    ++ optional withRedis hiredis
+    ++ optional withMysql mysql.connector-c
+    ++ optional withJson json_c
+    ++ optional withYubikey libyubikey
+    ++ optional withCollectd collectd;
 
   configureFlags = [
      "--sysconfdir=/etc"
      "--localstatedir=/var"
   ] ++ optional (!linkOpenssl) "--with-openssl=no";
 
+  postPatch = ''
+    substituteInPlace src/main/checkrad.in --replace "/usr/bin/finger" "${finger_bsd}/bin/finger"
+  '';
+
   installFlags = [
     "sysconfdir=\${out}/etc"
     "localstatedir=\${TMPDIR}"
   ];
 
-  src = fetchurl {
-    url = "ftp://ftp.freeradius.org/pub/freeradius/freeradius-server-${version}.tar.gz";
-    sha256 = "0naxw9b060rbp4409904j6nr2zwl6wbjrbq1839xrwhmaf8p4yxr";
-  };
-
   meta = with stdenv.lib; {
-    homepage = http://freeradius.org/;
+    homepage = https://freeradius.org/;
     description = "A modular, high performance free RADIUS suite";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with maintainers; [ sheenobu ];
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ sheenobu willibutz ];
+    platforms = with platforms; linux;
   };
 
 }

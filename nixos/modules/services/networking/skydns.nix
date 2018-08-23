@@ -11,7 +11,7 @@ in {
 
     etcd = {
       machines = mkOption {
-        default = [ "http://localhost:4001" ];
+        default = [ "http://127.0.0.1:2379" ];
         type = types.listOf types.str;
         description = "Skydns list of etcd endpoints to connect to.";
       };
@@ -83,7 +83,7 @@ in {
         SKYDNS_NAMESERVERS = concatStringsSep "," cfg.nameservers;
       };
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/skydns";
+        ExecStart = "${cfg.package.bin}/bin/skydns";
       };
     };
 

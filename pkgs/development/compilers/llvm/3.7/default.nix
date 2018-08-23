@@ -1,6 +1,9 @@
-{ newScope, stdenv, isl, fetchurl, overrideCC, wrapCC }:
+{ newScope, stdenv, libstdcxxHook, cmake, libxml2, python2, isl, fetchurl
+, overrideCC, wrapCC, ccWrapperFun, darwin
+}:
+
 let
-  callPackage = newScope (self // { inherit stdenv isl version fetch; });
+  callPackage = newScope (self // { inherit stdenv cmake libxml2 python2 isl version fetch; });
 
   version = "3.7.1";
 
@@ -22,9 +25,31 @@ let
       inherit clang-tools-extra_src stdenv;
     };
 
-    clang = wrapCC self.clang-unwrapped;
+    clang = if stdenv.cc.isGNU then self.libstdcxxClang else self.libcxxClang;
 
-    stdenv = overrideCC stdenv self.clang;
+    libstdcxxClang = ccWrapperFun {
+      cc = self.clang-unwrapped;
+      /* FIXME is this right? */
+      inherit (stdenv.cc) bintools libc nativeTools nativeLibc;
+      extraPackages = [ libstdcxxHook ];
+    };
+
+    libcxxClang = ccWrapperFun {
+      cc = self.clang-unwrapped;
+      /* FIXME is this right? */
+      inherit (stdenv.cc) bintools libc nativeTools nativeLibc;
+      extraPackages = [ self.libcxx self.libcxxabi ];
+    };
+
+    stdenv = stdenv.override (drv: {
+      allowedRequisites = null;
+      cc = self.clang;
+    });
+
+    libcxxStdenv = stdenv.override (drv: {
+      allowedRequisites = null;
+      cc = self.libcxxClang;
+    });
 
     lldb = callPackage ./lldb.nix {};
 

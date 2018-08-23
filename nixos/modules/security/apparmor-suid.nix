@@ -19,7 +19,7 @@ with lib;
   config = mkIf (cfg.confineSUIDApplications) {
     security.apparmor.profiles = [ (pkgs.writeText "ping" ''
       #include <tunables/global>
-      /var/setuid-wrappers/ping {
+      /run/wrappers/bin/ping {
         #include <abstractions/base>
         #include <abstractions/consoles>
         #include <abstractions/nameservice>
@@ -29,11 +29,10 @@ with lib;
         network inet raw,
 
         ${pkgs.glibc.out}/lib/*.so mr,
-        ${pkgs.libcap.out}/lib/libcap.so* mr,
+        ${pkgs.libcap.lib}/lib/libcap.so* mr,
         ${pkgs.attr.out}/lib/libattr.so* mr,
 
         ${pkgs.iputils}/bin/ping mixr,
-        /var/setuid-wrappers/ping.real r,
 
         #/etc/modules.conf r,
 

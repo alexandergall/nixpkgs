@@ -12,7 +12,8 @@ stdenv.mkDerivation rec {
     sha256 = "1jxmyp80pwbfgmqmwpjxs7z5dmm6pyf3qj62z20xy44izraadqz2";
   };
 
-  buildInputs = [ pkgconfig glib ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ glib ];
 
   # not needed to build it but to use it
   propagatedBuildInputs = [ autoconf automake libtool intltool ];
@@ -21,6 +22,7 @@ stdenv.mkDerivation rec {
     homepage = http://foo-projects.org/~benny/projects/xfce4-dev-tools/;
     description = "Tools and M4 macros for Xfce4 developers";
     license = stdenv.lib.licenses.gpl2Plus;
+    platforms = stdenv.lib.platforms.linux;
   };
 }
 

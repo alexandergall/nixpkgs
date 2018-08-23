@@ -1,30 +1,34 @@
 { stdenv, fetchurl, dpkg
-, alsaLib, atk, cairo, cups, dbus, expat, fontconfig, freetype, glib, gnome
-, libnotify, nspr, nss, systemd, xorg }:
+, alsaLib, atk, cairo, cups, curl, dbus, expat, fontconfig, freetype, glib
+, gnome2, libnotify, libxcb, nspr, nss, systemd, xorg }:
 
 let
 
-  version = "2.0.3";
+  version = "3.0.5";
 
-  rpath = stdenv.lib.makeSearchPath "lib" [
+  rpath = stdenv.lib.makeLibraryPath [
     alsaLib
     atk
     cairo
     cups
+    curl
     dbus
     expat
     fontconfig
     freetype
     glib
-    gnome.GConf
-    gnome.gdk_pixbuf
-    gnome.gtk
-    gnome.pango
+    gnome2.GConf
+    gnome2.gdk_pixbuf
+    gnome2.gtk
+    gnome2.pango
     libnotify
+    libxcb
     nspr
     nss
+    stdenv.cc.cc
     systemd
 
+    xorg.libxkbfile
     xorg.libX11
     xorg.libXcomposite
     xorg.libXcursor
@@ -35,13 +39,14 @@ let
     xorg.libXrandr
     xorg.libXrender
     xorg.libXtst
-  ] + ":${stdenv.cc.cc}/lib64";
+    xorg.libXScrnSaver
+  ] + ":${stdenv.cc.cc.lib}/lib64";
 
   src =
     if stdenv.system == "x86_64-linux" then
       fetchurl {
-        url = "https://slack-ssb-updates.global.ssl.fastly.net/linux_releases/slack-desktop-${version}-amd64.deb";
-        sha256 = "0pp8n1w9kmh3pph5kc6akdswl3z2lqwryjg9d267wgj62mslr3cg";
+        url = "https://downloads.slack-edge.com/linux_releases/slack-desktop-${version}-amd64.deb";
+        sha256 = "13im5m119cp5v0gvr1vpxjqskr8rvl6pii91b5x522wm7plfhj8s";
       }
     else
       throw "Slack is not supported on ${stdenv.system}";
@@ -57,7 +62,7 @@ in stdenv.mkDerivation {
     mkdir -p $out
     dpkg -x $src $out
     cp -av $out/usr/* $out
-    rm -rf $out/usr
+    rm -rf $out/etc $out/usr $out/share/lintian
 
     # Otherwise it looks "suspicious"
     chmod -R g-w $out
@@ -73,12 +78,13 @@ in stdenv.mkDerivation {
 
     # Fix the desktop link
     substituteInPlace $out/share/applications/slack.desktop \
-      --replace /usr/lib/slack/slack $out/lib/slack/slack
+      --replace /usr/bin/ $out/bin/ \
+      --replace /usr/share/ $out/share/
   '';
 
   meta = with stdenv.lib; {
     description = "Desktop client for Slack";
-    homepage = "https://slack.com";
+    homepage = https://slack.com;
     license = licenses.unfree;
     platforms = [ "x86_64-linux" ];
   };

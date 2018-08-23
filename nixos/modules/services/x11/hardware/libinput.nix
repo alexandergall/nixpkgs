@@ -25,16 +25,21 @@ in {
 
       accelProfile = mkOption {
         type = types.enum [ "flat" "adaptive" ];
-        default = "flat";
-        example = "adaptive";
+        default = "adaptive";
+        example = "flat";
         description =
           ''
-            Sets  the pointer acceleration profile to the given profile. Permitted values are adaptive, flat.
-            Not all devices support this option or all profiles. If a profile is unsupported, the default profile
-            for this is used. For a description on the profiles and their behavior, see the libinput documentation.
+            Sets  the pointer acceleration profile to the given profile.
+            Permitted values are adaptive, flat.
+            Not all devices support this option or all profiles.
+            If a profile is unsupported, the default profile for this is used.
+            <literal>flat</literal>: Pointer motion is accelerated by a constant
+            (device-specific) factor, depending on the current speed.
+            <literal>adaptive</literal>: Pointer acceleration depends on the input speed.
+            This is the default profile for most devices.
           '';
-      };    
-      
+      };
+
       accelSpeed = mkOption {
         type = types.nullOr types.string;
         default = null;
@@ -68,37 +73,34 @@ in {
       clickMethod = mkOption {
         type = types.nullOr (types.enum [ "none" "buttonareas" "clickfinger" ]);
         default = null;
-        example = "none";
         description =
           ''
-            Enables a click method. Permitted values are none, buttonareas, clickfinger.
+            Enables a click method. Permitted values are <literal>none</literal>,
+            <literal>buttonareas</literal>, <literal>clickfinger</literal>.
             Not all devices support all methods, if an option is unsupported,
-            the default click method for this device is used. 
+            the default click method for this device is used.
           '';
       };
-      
+
       leftHanded = mkOption {
         type = types.bool;
         default = false;
-        example = true;
         description = "Enables left-handed button orientation, i.e. swapping left and right buttons.";
       };
 
       middleEmulation = mkOption {
         type = types.bool;
         default = true;
-        example = false;
         description =
           ''
             Enables middle button emulation. When enabled, pressing the left and right buttons
             simultaneously produces a middle mouse button click.
           '';
       };
-      
+
       naturalScrolling = mkOption {
         type = types.bool;
         default = false;
-        example = true;
         description = "Enables or disables natural scrolling behavior.";
       };
 
@@ -119,14 +121,14 @@ in {
         example = "edge";
         description =
           ''
-            Specify the scrolling method.
+            Specify the scrolling method: <literal>twofinger</literal>, <literal>edge</literal>,
+            or <literal>none</literal>
           '';
       };
 
       horizontalScrolling = mkOption {
         type = types.bool;
         default = true;
-        example = false;
         description =
           ''
             Disables horizontal scrolling. When disabled, this driver will discard any horizontal scroll
@@ -141,14 +143,14 @@ in {
         example = "disabled";
         description =
           ''
-            Sets the send events mode to disabled, enabled, or "disable when an external mouse is connected".
+            Sets the send events mode to <literal>disabled</literal>, <literal>enabled</literal>,
+            or <literal>disabled-on-external-mouse</literal>
           '';
       };
 
       tapping = mkOption {
         type = types.bool;
         default = true;
-        example = false;
         description =
           ''
             Enables or disables tap-to-click behavior.
@@ -158,7 +160,6 @@ in {
       tappingDragLock = mkOption {
         type = types.bool;
         default = true;
-        example = false;
         description =
           ''
             Enables or disables drag lock during tapping behavior. When enabled, a finger up during tap-
@@ -169,8 +170,7 @@ in {
 
       disableWhileTyping = mkOption {
         type = types.bool;
-        default = true;
-        example = false;
+        default = false;
         description =
           ''
             Disable input method while typing.
@@ -198,6 +198,15 @@ in {
 
     environment.systemPackages = [ pkgs.xorg.xf86inputlibinput ];
 
+    environment.etc = [
+      (let cfgPath = "X11/xorg.conf.d/40-libinput.conf"; in {
+        source = pkgs.xorg.xf86inputlibinput.out + "/share/" + cfgPath;
+        target = cfgPath;
+      })
+    ];
+
+    services.udev.packages = [ pkgs.libinput ];
+
     services.xserver.config =
       ''
         # Automatically enable the libinput driver for all touchpads.
@@ -214,7 +223,7 @@ in {
           Option "LeftHanded" "${xorgBool cfg.leftHanded}"
           Option "MiddleEmulation" "${xorgBool cfg.middleEmulation}"
           Option "NaturalScrolling" "${xorgBool cfg.naturalScrolling}"
-          ${optionalString (cfg.scrollButton != null) ''Option "ScrollButton" "${cfg.scrollButton}"''}
+          ${optionalString (cfg.scrollButton != null) ''Option "ScrollButton" "${toString cfg.scrollButton}"''}
           Option "ScrollMethod" "${cfg.scrollMethod}"
           Option "HorizontalScrolling" "${xorgBool cfg.horizontalScrolling}"
           Option "SendEventsMode" "${cfg.sendEventsMode}"
@@ -224,6 +233,14 @@ in {
           ${cfg.additionalOptions}
         EndSection
       '';
+
+    assertions = [
+      # already present in synaptics.nix
+      /* {
+        assertion = !config.services.xserver.synaptics.enable;
+        message = "Synaptics and libinput are incompatible, you cannot enable both (in services.xserver).";
+      } */
+    ];
 
   };
 

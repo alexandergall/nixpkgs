@@ -10,13 +10,14 @@ stdenv.mkDerivation rec {
     sha256 = "0xdg6bc02bl8yz39l5i2skczfg17q4lif0qqan0dhvk0mibpcpj7";
   };
 
-  buildInputs = [ pkgconfig freetype cmake ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ freetype cmake ];
 
   patches = stdenv.lib.optionals stdenv.isDarwin [ ./macosx.patch ];
 
   meta = {
     description = "An advanced font engine";
     maintainers = [ stdenv.lib.maintainers.raskin ];
-    hydraPlatforms = stdenv.lib.platforms.unix;
+    platforms = stdenv.lib.platforms.unix;
   };
 }

@@ -1,6 +1,6 @@
 { lib, stdenv, fetchurl, python, pkgconfig, perl, libxslt, docbook_xsl
-, docbook_xml_dtd_42, docbook_xml_dtd_45, readline, talloc, ntdb, tdb, tevent
-, ldb, popt, iniparser, libbsd, libarchive, libiconv, gettext
+, docbook_xml_dtd_42, docbook_xml_dtd_45, readline, talloc
+, popt, iniparser, libbsd, libarchive, libiconv, gettext
 , kerberos, zlib, openldap, cups, pam, avahi, acl, libaio, fam, libceph, glusterfs
 , gnutls, libgcrypt, libgpgerror
 , ncurses, libunwind, libibverbs, librdmacm, systemd
@@ -18,21 +18,25 @@
 with lib;
 
 stdenv.mkDerivation rec {
-  name = "samba-4.3.6";
+  name = "samba-${version}";
+  version = "4.7.4";
 
   src = fetchurl {
     url = "mirror://samba/pub/samba/stable/${name}.tar.gz";
-    sha256 = "0929fpk2pq4v389naai519xvsm9bzpar4jlgjxwlx1cnn6jyql9j";
+    sha256 = "0iw290n0q4l5s92d0f9yz27yp3rdfr6bvsmvg1xvd19g8p2d04pv";
   };
+
+  outputs = [ "out" "dev" "man" ];
 
   patches =
     [ ./4.x-no-persistent-install.patch
-      ./4.x-fix-ctdb-deps.patch
+      ./patch-source3__libads__kerberos_keytab.c.patch
+      ./4.x-no-persistent-install-dynconfig.patch
     ];
 
   buildInputs =
     [ python pkgconfig perl libxslt docbook_xsl docbook_xml_dtd_42 /*
-      docbook_xml_dtd_45 */ readline talloc ntdb tdb tevent ldb popt iniparser
+      docbook_xml_dtd_45 */ readline talloc popt iniparser
       libbsd libarchive zlib acl fam libiconv gettext libunwind kerberos
     ]
     ++ optionals stdenv.isLinux [ libaio pam systemd ]
@@ -60,14 +64,12 @@ stdenv.mkDerivation rec {
       "--enable-fhs"
       "--sysconfdir=/etc"
       "--localstatedir=/var"
-      "--bundled-libraries=NONE"
-      "--private-libraries=NONE"
-      "--builtin-libraries=NONE"
     ]
     ++ optional (!enableDomainController) "--without-ad-dc"
     ++ optionals (!enableLDAP) [ "--without-ldap" "--without-ads" ];
 
-  enableParallelBuilding = true;
+  # To build in parallel.
+  buildPhase = "python buildtools/bin/waf build -j $NIX_BUILD_CORES";
 
   # Some libraries don't have /lib/samba in RPATH but need it.
   # Use find -type f -executable -exec echo {} \; -exec sh -c 'ldd {} | grep "not found"' \;

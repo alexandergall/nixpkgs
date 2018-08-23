@@ -1,4 +1,13 @@
-{ stdenv, fetchurl, ghc, perl, gmp, ncurses, libiconv }:
+{ stdenv, fetchurl, ghc, perl, ncurses, libiconv
+
+, # If enabled, GHC will be built with the GPL-free but slower integer-simple
+  # library instead of the faster but GPLed integer-gmp library.
+  enableIntegerSimple ? false, gmp ? null
+}:
+
+# TODO(@Ericson2314): Cross compilation support
+assert stdenv.targetPlatform == stdenv.hostPlatform;
+assert !enableIntegerSimple -> gmp != null;
 
 stdenv.mkDerivation rec {
   version = "7.4.2";
@@ -6,30 +15,34 @@ stdenv.mkDerivation rec {
   name = "ghc-${version}";
 
   src = fetchurl {
-    url = "http://haskell.org/ghc/dist/7.4.2/${name}-src.tar.bz2";
+    url = "https://downloads.haskell.org/~ghc/${version}/ghc-${version}-src.tar.bz2";
     sha256 = "0vc3zmxqi4gflssmj35n5c8idbvyrhd88abi50whbirwlf4i5vpj";
   };
 
-  patches = [ ./fix-7.4.2-clang.patch ];
+  patches = [ ./fix-7.4.2-clang.patch ./relocation.patch ];
 
-  buildInputs = [ ghc perl gmp ncurses ];
+  buildInputs = [ ghc perl ncurses ]
+                ++ stdenv.lib.optional (!enableIntegerSimple) gmp;
 
   buildMK = ''
-    libraries/integer-gmp_CONFIGURE_OPTS += --configure-option=--with-gmp-libraries="${gmp.out}/lib"
-    libraries/integer-gmp_CONFIGURE_OPTS += --configure-option=--with-gmp-includes="${gmp.dev}/include"
     libraries/terminfo_CONFIGURE_OPTS += --configure-option=--with-curses-includes="${ncurses.dev}/include"
     libraries/terminfo_CONFIGURE_OPTS += --configure-option=--with-curses-libraries="${ncurses.out}/lib"
     ${stdenv.lib.optionalString stdenv.isDarwin ''
       libraries/base_CONFIGURE_OPTS += --configure-option=--with-iconv-includes="${libiconv}/include"
       libraries/base_CONFIGURE_OPTS += --configure-option=--with-iconv-libraries="${libiconv}/lib"
     ''}
-  '';
+  '' + (if enableIntegerSimple then ''
+    INTEGER_LIBRARY = integer-simple
+  '' else ''
+    libraries/integer-gmp_CONFIGURE_OPTS += --configure-option=--with-gmp-libraries="${gmp.out}/lib"
+    libraries/integer-gmp_CONFIGURE_OPTS += --configure-option=--with-gmp-includes="${gmp.dev}/include"
+  '');
 
   preConfigure = ''
-    echo "${buildMK}" > mk/build.mk
+    echo -n "${buildMK}" > mk/build.mk
     sed -i -e 's|-isysroot /Developer/SDKs/MacOSX10.5.sdk||' configure
   '' + stdenv.lib.optionalString (!stdenv.isDarwin) ''
-    export NIX_LDFLAGS="$NIX_LDFLAGS -rpath $out/lib/ghc-${version}"
+    export NIX_LDFLAGS+=" -rpath $out/lib/ghc-${version}"
   '' + stdenv.lib.optionalString stdenv.isDarwin ''
     find . -name '*.hs'  | xargs sed -i -e 's|ASSERT (|ASSERT(|' -e 's|ASSERT2 (|ASSERT2(|' -e 's|WARN (|WARN(|'
     find . -name '*.lhs' | xargs sed -i -e 's|ASSERT (|ASSERT(|' -e 's|ASSERT2 (|ASSERT2(|' -e 's|WARN (|WARN(|'
@@ -43,13 +56,20 @@ stdenv.mkDerivation rec {
   # that in turn causes GHCi to abort
   stripDebugFlags = [ "-S" ] ++ stdenv.lib.optional (!stdenv.isDarwin) "--keep-file-symbols";
 
+  passthru = {
+    targetPrefix = "";
+
+    # Our Cabal compiler name
+    haskellCompilerName = "ghc-7.4.2";
+  };
+
   meta = {
-    homepage = "http://haskell.org/ghc";
+    homepage = http://haskell.org/ghc;
     description = "The Glasgow Haskell Compiler";
     maintainers = [
       stdenv.lib.maintainers.marcweber
       stdenv.lib.maintainers.andres
-      stdenv.lib.maintainers.simons
+      stdenv.lib.maintainers.peti
     ];
     inherit (ghc.meta) license platforms;
   };

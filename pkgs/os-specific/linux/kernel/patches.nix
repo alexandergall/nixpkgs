@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgs }:
+{ stdenv, fetchurl, fetchpatch, pkgs }:
 
 let
 
@@ -17,43 +17,18 @@ let
         '';
       };
     };
-
-  grsecPatch = { grversion ? "3.1", kernel, patches, kversion, revision, branch ? "test", sha256 }:
-    assert kversion == kernel.version;
-    { name = "grsecurity-${grversion}-${kversion}";
-      inherit grversion kernel patches kversion revision;
-      patch = fetchurl {
-        url = if branch == "stable"
-              then "https://github.com/kdave/grsecurity-patches/blob/master/grsecurity_patches/grsecurity-${grversion}-${kversion}-${revision}.patch?raw=true"
-              else "https://github.com/slashbeast/grsecurity-scrape/blob/master/${branch}/grsecurity-${grversion}-${kversion}-${revision}.patch?raw=true";
-        inherit sha256;
-      };
-      features.grsecurity = true;
-    };
-
 in
 
 rec {
-
-  link_lguest =
-    { name = "gcc5-link-lguest";
-      patch = ./gcc5-link-lguest.patch;
-    };
-
-  link_apm =
-    { name = "gcc5-link-apm";
-      patch = ./gcc5-link-apm.patch;
-    };
 
   bridge_stp_helper =
     { name = "bridge-stp-helper";
       patch = ./bridge-stp-helper.patch;
     };
 
-  no_xsave =
-    { name = "no-xsave";
-      patch = ./no-xsave.patch;
-      features.noXsave = true;
+  p9_fixes =
+    { name = "p9-fixes";
+      patch = ./p9-fixes.patch;
     };
 
   mips_fpureg_emu =
@@ -71,62 +46,9 @@ rec {
       patch = ./mips-ext3-n32.patch;
     };
 
-  ubuntu_fan_4_4 =
-    { name = "ubuntu-fan";
-      patch = ./ubuntu-fan-4.4.patch;
-    };
-
-  ubuntu_unprivileged_overlayfs =
-    { name = "ubuntu-unprivileged-overlayfs";
-      patch = ./ubuntu-unprivileged-overlayfs.patch;
-    };
-
-  tuxonice_3_10 = makeTuxonicePatch {
-    version = "2013-11-07";
-    kernelVersion = "3.10.18";
-    sha256 = "00b1rqgd4yr206dxp4mcymr56ymbjcjfa4m82pxw73khj032qw3j";
-  };
-
-  grsecurity_3_14 = grsecPatch
-    { kernel    = pkgs.grsecurity_base_linux_3_14;
-      patches   = [ grsecurity_fix_path_3_14 ];
-      kversion  = "3.14.51";
-      revision  = "201508181951";
-      branch    = "stable";
-      sha256    = "1sp1gwa7ahzflq7ayb51bg52abrn5zx1hb3pff3axpjqq7vfai6f";
-    };
-
-  grsecurity_4_1 = grsecPatch
-    { kernel    = pkgs.grsecurity_base_linux_4_1;
-      patches   = [ grsecurity_fix_path_3_14 ];
-      kversion  = "4.1.7";
-      revision  = "201509201149";
-      sha256    = "1agv8c3c4vmh5algbzmrq2f6vwk72rikrlcbm4h7jbrb9js6fxk4";
-    };
-
-  grsecurity_4_4 = grsecPatch
-    { kernel    = pkgs.grsecurity_base_linux_4_4;
-      patches   = [ grsecurity_fix_path_4_4 ];
-      kversion  = "4.4.5";
-      revision  = "201603131305";
-      sha256    = "04k4nhshl6r5n41ha5620s7cd70dmmmvyf9mnn5359jr1720kxpf";
-    };
-
-  grsecurity_latest = grsecurity_4_4;
-
-  grsecurity_fix_path_3_14 =
-    { name = "grsecurity-fix-path-3.14";
-      patch = ./grsecurity-path-3.14.patch;
-    };
-
-  grsecurity_fix_path_4_4 =
-    { name = "grsecurity-fix-path-4.4";
-      patch = ./grsecurity-path-4.4.patch;
-    };
-
-  crc_regression =
-    { name = "crc-backport-regression";
-      patch = ./crc-regression.patch;
+  modinst_arg_list_too_long =
+    { name = "modinst-arglist-too-long";
+      patch = ./modinst-arg-list-too-long.patch;
     };
 
   genksyms_fix_segfault =
@@ -134,28 +56,21 @@ rec {
       patch = ./genksyms-fix-segfault.patch;
     };
 
+  cpu-cgroup-v2 = import ./cpu-cgroup-v2-patches;
 
-  chromiumos_Kconfig_fix_entries_3_14 =
-    { name = "Kconfig_fix_entries_3_14";
-      patch = ./chromiumos-patches/fix-double-Kconfig-entry-3.14.patch;
-    };
+  tag_hardened = rec {
+    name = "tag-hardened";
+    patch = ./tag-hardened.patch;
+  };
 
-  chromiumos_Kconfig_fix_entries_3_18 =
-    { name = "Kconfig_fix_entries_3_18";
-      patch = ./chromiumos-patches/fix-double-Kconfig-entry-3.18.patch;
+  # https://bugzilla.kernel.org/show_bug.cgi?id=197591#c6
+  iwlwifi_mvm_support_version_7_scan_req_umac_fw_command = rec {
+    name = "iwlwifi_mvm_support_version_7_scan_req_umac_fw_command";
+    patch = fetchpatch {
+      name = name + ".patch";
+      url = https://bugzilla.kernel.org/attachment.cgi?id=260597;
+      sha256 = "09096npxpgvlwdz3pb3m9brvxh7vy0xc9z9p8hh85xyczyzcsjhr";
     };
+  };
 
-  chromiumos_no_link_restrictions =
-    { name = "chromium-no-link-restrictions";
-      patch = ./chromiumos-patches/no-link-restrictions.patch;
-    };
-
-  chromiumos_mfd_fix_dependency =
-    { name = "mfd_fix_dependency";
-      patch = ./chromiumos-patches/mfd-fix-dependency.patch;
-    };
-  qat_common_Makefile =
-    { name = "qat_common_Makefile";
-      patch = ./qat_common_Makefile.patch;
-    };
 }

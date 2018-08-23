@@ -8,7 +8,13 @@ stdenv.mkDerivation {
     sha256 = "0pjir8cwn0087mxszzbsi1gyfc6373vif96cw4q3m1x6p49kd1bq";
   };
 
-  patches = [ ./getcwd-chroot.patch ];
+  patches = [
+    ./getcwd-chroot.patch
+    ./CVE-2012-0804.patch
+    ./CVE-2017-12836.patch
+  ];
+
+  hardeningDisable = [ "fortify" "format" ];
 
   preConfigure = ''
     # Apply the Debian patches.
@@ -21,10 +27,8 @@ stdenv.mkDerivation {
   buildInputs = [ nano ];
 
   meta = {
-    homepage = "http://cvs.nongnu.org";
+    homepage = http://cvs.nongnu.org;
     description = "Concurrent Versions System - a source control system";
-
     platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.simons ];
   };
 }

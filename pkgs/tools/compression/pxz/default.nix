@@ -31,7 +31,7 @@ stdenv.mkDerivation {
   '';
 
   meta = {
-    homepage = "https://jnovy.fedorapeople.org/pxz/";
+    homepage = https://jnovy.fedorapeople.org/pxz/;
     license = stdenv.lib.licenses.gpl2Plus;
     maintainers = with stdenv.lib.maintainers; [pashev];
     description = ''Parallel XZ is a compression utility that takes advantage of
@@ -39,5 +39,6 @@ stdenv.mkDerivation {
       cores and processors simultaneously. Its primary goal is to utilize all
       resources to speed up compression time with minimal possible influence
       on compression ratio'';
+    platforms = with stdenv.lib.platforms; linux;
   };
 }

@@ -7,9 +7,7 @@ stdenv.mkDerivation rec {
   env = bundlerEnv {
     name = "${name}-gems";
 
-    gemfile = ./Gemfile;
-    lockfile = ./Gemfile.lock;
-    gemset = ./gemset.nix;
+    gemdir = ./.;
   };
 
   phases = ["installPhase"];
@@ -19,7 +17,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out/bin
     makeWrapper ${env}/bin/cide $out/bin/cide \
-      --set PATH ${docker}/bin:${git}/bin:${gnutar}/bin:${gzip}/bin
+      --set PATH ${stdenv.lib.makeBinPath [ docker git gnutar gzip ]}
   '';
 
   meta = with lib; {

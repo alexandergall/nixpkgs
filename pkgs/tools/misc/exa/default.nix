@@ -1,22 +1,27 @@
-{ stdenv, fetchFromGitHub, rustPlatform, openssl, cmake, zlib }:
+{ stdenv, fetchFromGitHub, rustPlatform, cmake, perl, pkgconfig, zlib
+, darwin, libiconv
+}:
 
 with rustPlatform;
 
 buildRustPackage rec {
   name = "exa-${version}";
-  version = "2016-03-22";
+  version = "0.8.0";
 
-  depsSha256 = "18anwh235kzziq6z7md8f3rl2xl4l9d4ivsqw9grkb7yivd5j0jk";
+  cargoSha256 = "08zzn3a32xfjkmpawcjppn1mr26ws3iv40cckiz8ldz4qc8y9gdh";
 
   src = fetchFromGitHub {
     owner = "ogham";
     repo = "exa";
-    rev = "8805ce9e3bcd4b56f8811a686dd56c47202cdbab";
-    sha256 = "0dkvk0rsf068as6zcd01p7959rdjzm26mlkpid6z0j168gp4kh4q";
+    rev = "v${version}";
+    sha256 = "0jy11a3xfnfnmyw1kjmv4ffavhijs8c940kw24vafklnacx5n88m";
   };
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ openssl zlib ];
+  nativeBuildInputs = [ cmake pkgconfig perl ];
+  buildInputs = [ zlib ]
+  ++ stdenv.lib.optionals stdenv.isDarwin [
+    libiconv darwin.apple_sdk.frameworks.Security ]
+  ;
 
   # Some tests fail, but Travis ensures a proper build
   doCheck = false;
@@ -31,8 +36,8 @@ buildRustPackage rec {
       for a directory, or recursing into directories with a tree view. exa is
       written in Rust, so it’s small, fast, and portable.
     '';
-    homepage = http://bsago.me/exa;
+    homepage = https://the.exa.website;
     license = licenses.mit;
-    maintainer = [ maintainers.ehegnes ];
+    maintainers = [ maintainers.ehegnes ];
   };
 }

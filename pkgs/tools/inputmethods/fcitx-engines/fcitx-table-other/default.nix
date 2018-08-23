@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name = "fcitx-table-other-${version}";
-  version = "0.2.3";
+  version = "0.2.4";
 
   src = fetchurl {
     url = "http://download.fcitx-im.org/fcitx-table-other/${name}.tar.xz";
-    sha256 = "12fqbsjrpx5pndx2jf7fksrlp01a4yxz62h2vpxrbkpk73ljly4v";
+    sha256 = "1di60lr6l5k2sdwi3yrc0hl89j2k0yipayrsn803vd040w1fgfhq";
   };
 
   buildInputs = [ cmake fcitx gettext ];

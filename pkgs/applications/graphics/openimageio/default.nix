@@ -1,18 +1,24 @@
-{ stdenv, fetchurl, boost, cmake, ilmbase, libjpeg, libpng, libtiff
+{ stdenv, fetchFromGitHub, boost, cmake, ilmbase, libjpeg, libpng, libtiff
 , opencolorio, openexr, unzip
 }:
 
 stdenv.mkDerivation rec {
   name = "openimageio-${version}";
-  version = "1.6.11";
+  version = "1.8.8";
 
-  src = fetchurl {
-    url = "https://github.com/OpenImageIO/oiio/archive/Release-${version}.zip";
-    sha256 = "0cr0z81a41bg193dx9crcq1mns7mmzz7qys4lrbm18cmdbwkk88x";
+  src = fetchFromGitHub {
+    owner = "OpenImageIO";
+    repo = "oiio";
+    rev = "Release-${version}";
+    sha256 = "1jn4ph7giwxr65xxbm59i03wywnmxkqnpvqp0kcajl4k48vq3wkr";
   };
 
+  outputs = [ "bin" "out" "dev" "doc" ];
+
+  nativeBuildInputs = [ cmake ];
   buildInputs = [
-    boost cmake ilmbase libjpeg libpng libtiff opencolorio openexr
+    boost ilmbase libjpeg libpng 
+    libtiff opencolorio openexr
     unzip
   ];
 
@@ -21,8 +27,13 @@ stdenv.mkDerivation rec {
   ];
 
   preBuild = ''
-    makeFlags="ILMBASE_HOME=${ilmbase} OPENEXR_HOME=${openexr} USE_PYTHON=0
+    makeFlags="ILMBASE_HOME=${ilmbase.dev} OPENEXR_HOME=${openexr.dev} USE_PYTHON=0
       INSTALLDIR=$out dist_dir="
+  '';
+
+  postInstall = ''
+    mkdir -p $bin
+    mv $out/bin $bin/
   '';
 
   enableParallelBuilding = true;

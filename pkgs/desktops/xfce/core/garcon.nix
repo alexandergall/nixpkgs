@@ -12,9 +12,11 @@ stdenv.mkDerivation rec {
     sha256 = "0wm9pjbwq53s3n3nwvsyf0q8lbmhiy2ln3bn5ncihr9vf5cwhzbq";
   };
 
-  outputs = [ "dev" "out" ];
+  outputs = [ "out" "dev" ];
+  patches = [ ./garcon-10967.patch ./garcon-12700.patch ];
 
-  buildInputs = [ pkgconfig intltool glib libxfce4util gtk libxfce4ui ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ intltool glib libxfce4util gtk libxfce4ui ];
 
   meta = with stdenv.lib; {
     homepage = http://www.xfce.org/;
@@ -23,4 +25,3 @@ stdenv.mkDerivation rec {
     platforms = platforms.linux;
   };
 }
-

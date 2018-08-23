@@ -7,11 +7,12 @@
 assert qt4Support -> qt4 != null;
 
 stdenv.mkDerivation rec {
-  name = "avahi-0.6.31";
+  name = "avahi-${version}";
+  version = "0.7";
 
   src = fetchurl {
-    url = "${meta.homepage}/download/${name}.tar.gz";
-    sha256 = "0j5b5ld6bjyh3qhd2nw0jb84znq0wqai7fsrdzg7bpg24jdp2wl3";
+    url = "https://github.com/lathiat/avahi/releases/download/v${version}/avahi-${version}.tar.gz";
+    sha256 = "0128n7jlshw4bpx0vg8lwj8qwdisjxi7mvniwfafgnkzzrfrpaap";
   };
 
   patches = [ ./no-mkdir-localstatedir.patch ];

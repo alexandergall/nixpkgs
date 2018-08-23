@@ -12,11 +12,11 @@ in
 with stdenv.lib;
 stdenv.mkDerivation rec {
   name = "lxc-${version}";
-  version = "2.0.0";
+  version = "2.1.1";
 
   src = fetchurl {
     url = "https://linuxcontainers.org/downloads/lxc/lxc-${version}.tar.gz";
-    sha256 = "1r0hgk91n3frrmla1681l74ag5sngbbkdagvjfqzxwcf9l8pwwsv";
+    sha256 = "1xpghrinxhm2072fwmn42pxhjwh7qx6cbsipw4s6g38a8mkklrk8";
   };
 
   nativeBuildInputs = [
@@ -24,14 +24,26 @@ stdenv.mkDerivation rec {
   ];
   buildInputs = [
     libapparmor gnutls libselinux libseccomp cgmanager libnih dbus libcap
-    python3Packages.python systemd
+    python3Packages.python python3Packages.setuptools systemd
   ];
 
   patches = [
     ./support-db2x.patch
   ];
 
+  postPatch = ''
+    sed -i '/chmod u+s/d' src/lxc/Makefile.am
+  '';
+
   XML_CATALOG_FILES = "${docbook_xml_dtd_45}/xml/dtd/docbook/catalog.xml";
+
+  # FIXME
+  # glibc 2.25 moved major()/minor() to <sys/sysmacros.h>.
+  # this commit should detect this: https://github.com/lxc/lxc/pull/1388/commits/af6824fce9c9536fbcabef8d5547f6c486f55fdf
+  # However autotools checks if mkdev is still defined in <sys/types.h> runs before
+  # checking if major()/minor() is defined there. The mkdev check succeeds with
+  # a warning and the check which should set MAJOR_IN_SYSMACROS is skipped.
+  NIX_CFLAGS_COMPILE = [ "-DMAJOR_IN_SYSMACROS" ];
 
   configureFlags = [
     "--localstatedir=/var"
@@ -58,6 +70,7 @@ stdenv.mkDerivation rec {
     "localstatedir=\${TMPDIR}"
     "sysconfdir=\${out}/etc"
     "sysconfigdir=\${out}/etc/default"
+    "bashcompdir=\${out}/share/bash-completion/completions"
     "READMEdir=\${TMPDIR}/var/lib/lxc/rootfs"
     "LXCPATH=\${TMPDIR}/var/lib/lxc"
   ];
@@ -67,8 +80,8 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = "http://lxc.sourceforge.net";
-    description = "userspace tools for Linux Containers, a lightweight virtualization system";
+    homepage = https://linuxcontainers.org/;
+    description = "Userspace tools for Linux Containers, a lightweight virtualization system";
     license = licenses.lgpl21Plus;
 
     longDescription = ''
@@ -80,6 +93,6 @@ stdenv.mkDerivation rec {
     '';
 
     platforms = platforms.linux;
-    maintainers = with maintainers; [ simons wkennington globin fpletz ];
+    maintainers = with maintainers; [ wkennington globin fpletz ];
   };
 }

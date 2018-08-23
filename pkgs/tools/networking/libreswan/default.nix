@@ -1,15 +1,15 @@
 { stdenv, fetchurl, makeWrapper,
   pkgconfig, systemd, gmp, unbound, bison, flex, pam, libevent, libcap_ng, curl, nspr,
-  bash, iproute, iptables, procps, coreutils, gnused, gawk, nssTools, which, python,
+  bash, iproute, iptables, procps, coreutils, gnused, gawk, nss, which, python,
   docs ? false, xmlto
   }:
 
 let
   optional = stdenv.lib.optional;
-  version = "3.16";
+  version = "3.18";
   name = "libreswan-${version}";
   binPath = stdenv.lib.makeBinPath [
-    bash iproute iptables procps coreutils gnused gawk nssTools which python
+    bash iproute iptables procps coreutils gnused gawk nss.tools which python
   ];
 in
 
@@ -21,12 +21,15 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     url = "https://download.libreswan.org/${name}.tar.gz";
-    sha256 = "15qv4101p1jw591l04gsfscb3farzd278mgi8yph015vmifyjxrd";
+    sha256 = "0zginnakxw7m79zrdvfdvliaiyg78zgqfqkks9z5d1rjj5w13xig";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ pkgconfig bash iproute iptables systemd coreutils gnused gawk gmp unbound bison flex pam libevent
-                  libcap_ng curl nspr nssTools python ]
+  # These flags were added to compile v3.18. Try to lift them when updating.
+  NIX_CFLAGS_COMPILE = [ "-Wno-error=redundant-decls" "-Wno-error=format-nonliteral" ];
+
+  nativeBuildInputs = [ makeWrapper pkgconfig ];
+  buildInputs = [ bash iproute iptables systemd coreutils gnused gawk gmp unbound bison flex pam libevent
+                  libcap_ng curl nspr nss python ]
                 ++ optional docs xmlto;
 
   prePatch = ''
@@ -42,11 +45,13 @@ stdenv.mkDerivation {
     # Fix python script to use the correct python
     sed -i -e 's|#!/usr/bin/python|#!/usr/bin/env python|' -e 's/^\(\W*\)installstartcheck()/\1sscmd = "ss"\n\0/' programs/verify/verify.in
   '';
-  
+
+  patches = [ ./libreswan-3.18-glibc-2.26.patch ];
+
   # Set appropriate paths for build
   preBuild = "export INC_USRLOCAL=\${out}";
 
-  makeFlags = [ 
+  makeFlags = [
     "INITSYSTEM=systemd"
     (if docs then "all" else "base")
   ];
@@ -64,10 +69,10 @@ stdenv.mkDerivation {
     done
   '';
 
-  enableParallelBuilding = false;
+  enableParallelBuilding = true;
 
   meta = {
-    homepage = "https://libreswan.org";
+    homepage = https://libreswan.org;
     description = "A free software implementation of the VPN protocol based on IPSec and the Internet Key Exchange";
     platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin ++ stdenv.lib.platforms.freebsd;
     maintainers = [ stdenv.lib.maintainers.afranchuk ];

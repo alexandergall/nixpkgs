@@ -1,55 +1,39 @@
-{ lib, stdenv, fetchurl, makeWrapper, cmake, pkgconfig
-, wlc, dbus_libs, wayland, libxkbcommon, pixman, libinput, udev, zlib, libpng, libdrm, libX11
+{ lib, stdenv, fetchgit, cmake, pkgconfig, makeWrapper, callPackage
+, wlc, dbus_libs, wayland, libxkbcommon, pixman, libinput, udev, zlib, libpng
+, libdrm, libX11
+, westonLite
 }:
 
-stdenv.mkDerivation rec {
+let
+  bemenu = callPackage ./bemenu.nix {};
+in stdenv.mkDerivation rec {
   name = "orbment-${version}";
-  version = "git-2016-01-31";
-  repo = "https://github.com/Cloudef/orbment";
-  rev = "7f649fb76649f826dd29578a5ec41bb561b116eb";
+  version = "git-2016-08-13";
 
-  chck_repo = "https://github.com/Cloudef/chck";
-  chck_rev = "fe5e2606b7242aa5d89af2ea9fd048821128d2bc";
-  inihck_repo = "https://github.com/Cloudef/inihck";
-  inihck_rev = "462cbd5fd67226714ac2bdfe4ceaec8e251b2d9c";
+  src = fetchgit {
+    url = "https://github.com/Cloudef/orbment";
+    rev = "01dcfff9719e20261a6d8c761c0cc2f8fa0d0de5";
+    sha256 = "04mv9nh847vijr01zrs47fzmnwfhdx09vi3ddv843mx10yx7lqdb";
+    fetchSubmodules = true;
+  };
 
-  srcs = [
-   (fetchurl {
-     url = "${repo}/archive/${rev}.tar.gz";
-     sha256 = "5a426da0d5f4487911cfe9226865ed0cd1a7cdf253eec19d5eadc4b0d14a2ea0";
-   })
-   (fetchurl {
-     url = "${chck_repo}/archive/${chck_rev}.tar.gz";
-     sha256 = "ca316b544c48e837c32f08d613be42da10e0a3251e8e4488d1848b91ef92ab9e";
-   })
-   (fetchurl {
-     url = "${inihck_repo}/archive/${inihck_rev}.tar.gz";
-     sha256 = "d21f2ac25eafed285614f5f0ef7a1014d629ba382f4e64bc89fe2c3e98c2777f";
-   })
+  nativeBuildInputs = [ cmake pkgconfig makeWrapper ];
+
+  buildInputs = [
+    wlc dbus_libs wayland libxkbcommon pixman libinput udev zlib libpng libX11
+    libdrm
   ];
 
-  sourceRoot = "orbment-${rev}";
-  postUnpack = ''
-    rm -rf orbment-${rev}/lib/chck orbment-${rev}/lib/inihck
-    ln -s ../../chck-${chck_rev} orbment-${rev}/lib/chck
-    ln -s ../../inihck-${inihck_rev} orbment-${rev}/lib/inihck
-  '';
-
-  nativeBuildInputs = [ cmake pkgconfig ];
-
-  buildInputs = [ makeWrapper wlc dbus_libs wayland libxkbcommon pixman libinput udev zlib libpng libX11 libdrm ];
-  makeFlags = "PREFIX=$(out)";
-  installPhase = "PREFIX=$out make install";
-
-  LD_LIBRARY_PATH = lib.makeLibraryPath [ libX11 libdrm dbus_libs ];
-  preFixup = ''
+  postFixup = ''
     wrapProgram $out/bin/orbment \
-      --prefix LD_LIBRARY_PATH : "${LD_LIBRARY_PATH}";
+      --prefix PATH : "${stdenv.lib.makeBinPath [ bemenu westonLite ]}"
   '';
+
+  enableParallelBuilding = true;
 
   meta = {
     description = "Modular Wayland compositor";
-    homepage    = repo;
+    homepage    = src.url;
     license     = lib.licenses.mit;
     platforms   = lib.platforms.linux;
     maintainers = with lib.maintainers; [ ];

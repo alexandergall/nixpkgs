@@ -1,16 +1,23 @@
 { stdenv, fetchurl }:
 
-stdenv.mkDerivation {
-  name = "byacc-1.9";
+stdenv.mkDerivation rec {
+  name = "byacc-${version}";
+  version = "20170709";
 
   src = fetchurl {
-    url = ftp://invisible-island.net/byacc/byacc-20140715.tgz;
-    sha256 = "1rbzx5ipkvih9rjfdfv6310wcr6mxjbdlsh9zcv5aaz6yxxxil7c";
+    urls = [
+      "ftp://ftp.invisible-island.net/byacc/${name}.tgz"
+      "https://invisible-mirror.net/archives/byacc/${name}.tgz"
+    ];
+    sha256 = "1syrg1nwh2qmlr5mh7c4vz9psdv4gf55h8i5ffw84q6whlcq1kr7";
   };
 
-  meta = {
+  doCheck = true;
+
+  meta = with stdenv.lib; {
     description = "Berkeley YACC";
-    homepage = http://dickey.his.com/byacc/byacc.html;
-    license = stdenv.lib.licenses.publicDomain;
+    homepage = http://invisible-island.net/byacc/byacc.html;
+    license = licenses.publicDomain;
+    platforms = platforms.unix;
   };
 }

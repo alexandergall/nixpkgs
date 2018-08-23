@@ -1,33 +1,55 @@
-{ pkgs, stdenv, buildPythonApplication, pythonPackages, fetchurl, fetchFromGitHub }:
+{ lib, pkgs, stdenv, pythonPackages, fetchurl, fetchFromGitHub, fetchpatch }:
 let
-  matrix-angular-sdk = buildPythonApplication rec {
+  matrix-angular-sdk = pythonPackages.buildPythonPackage rec {
     name = "matrix-angular-sdk-${version}";
-    version = "0.6.6";
+    version = "0.6.8";
 
     src = fetchurl {
-      url = "https://pypi.python.org/packages/source/m/matrix-angular-sdk/matrix-angular-sdk-${version}.tar.gz";
-      sha256 = "1vknhmibb8gh8lng50va2cdvng5xm7vqv9dl680m3gj38pg0bv8a";
+      url = "mirror://pypi/m/matrix-angular-sdk/matrix-angular-sdk-${version}.tar.gz";
+      sha256 = "0gmx4y5kqqphnq3m7xk2vpzb0w2a4palicw7wfdr1q2schl9fhz2";
     };
   };
-in
-buildPythonApplication rec {
+  matrix-synapse-ldap3 = pythonPackages.buildPythonPackage rec {
+    pname = "matrix-synapse-ldap3";
+    version = "0.1.3";
+
+    src = fetchFromGitHub {
+      owner = "matrix-org";
+      repo = "matrix-synapse-ldap3";
+      rev = "v${version}";
+      sha256 = "0ss7ld3bpmqm8wcs64q1kb7vxlpmwk9lsgq0mh21a9izyfc7jb2l";
+    };
+
+    propagatedBuildInputs = with pythonPackages; [ service-identity ldap3 twisted ];
+
+    checkInputs = with pythonPackages; [ ldaptor mock ];
+  };
+in pythonPackages.buildPythonApplication rec {
   name = "matrix-synapse-${version}";
-  version = "0.12.0";
+  version = "0.26.0";
 
   src = fetchFromGitHub {
     owner = "matrix-org";
     repo = "synapse";
-    rev = "f35f8d06ea58e2d0cdccd82924c7a44fd93f4c38";
-    sha256 = "0b0k1am9lh0qglagc06m91qs26ybv37k7wpbg5333x8jaf5d1si4";
+    rev = "v${version}";
+    sha256 = "1ggdnb4c8y835j9lxsglxry6fqy7d190s70rccjrc3rj0p5vwlyj";
   };
 
-  patches = [ ./matrix-synapse.patch ];
+  patches = [
+    (fetchpatch { # Update pynacl dependency
+      url = "https://github.com/matrix-org/synapse/pull/2888.patch";
+      sha256 = "0gr9vwv02ps17d6pzassp9xmj1qbdgxwn1z4kckx4x964zzhyn4f";
+    })
+    ./matrix-synapse.patch
+  ];
 
   propagatedBuildInputs = with pythonPackages; [
-    blist canonicaljson daemonize dateutil frozendict pillow pybcrypt pyasn1
-    pydenticon pymacaroons-pynacl pynacl pyopenssl pysaml2 pytz requests2
-    service-identity signedjson systemd twisted ujson unpaddedbase64 pyyaml
-    matrix-angular-sdk
+    blist canonicaljson daemonize dateutil frozendict pillow pyasn1
+    pydenticon pymacaroons-pynacl pynacl pyopenssl pysaml2 pytz requests
+    signedjson systemd twisted ujson unpaddedbase64 pyyaml
+    matrix-angular-sdk bleach netaddr jinja2 psycopg2
+    psutil msgpack-python lxml matrix-synapse-ldap3
+    phonenumbers jsonschema affinity bcrypt
   ];
 
   # Checks fail because of Tox.
@@ -37,9 +59,10 @@ buildPythonApplication rec {
     mock setuptoolsTrial
   ];
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = https://matrix.org;
     description = "Matrix reference homeserver";
-    license = stdenv.lib.licenses.asl20;
+    license = licenses.asl20;
+    maintainers = [ maintainers.ralith maintainers.roblabla ];
   };
 }

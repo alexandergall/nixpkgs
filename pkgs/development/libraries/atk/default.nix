@@ -1,28 +1,37 @@
-{ stdenv, fetchurl, pkgconfig, perl, glib, libintlOrEmpty, gobjectIntrospection }:
+{ stdenv, fetchurl, pkgconfig, perl, glib, libintlOrEmpty, gobjectIntrospection, gnome3 }:
 
 let
-  ver_maj = "2.18";
-  ver_min = "0";
+  pname = "atk";
+  version = "2.26.1";
 in
 stdenv.mkDerivation rec {
-  name = "atk-${ver_maj}.${ver_min}";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/atk/${ver_maj}/${name}.tar.xz";
-    sha256 = "ce6c48d77bf951083029d5a396dd552d836fff3c1715d3a7022e917e46d0c92b";
+    url = "mirror://gnome/sources/${pname}/${gnome3.versionBranch version}/${name}.tar.xz";
+    sha256 = "1jwpx8az0iifw176dc2hl4mmg6gvxzxdkd1qvg4ds7c5hdmzy07g";
   };
 
   enableParallelBuilding = true;
 
-  outputs = [ "dev" "out" ];
+  outputs = [ "out" "dev" ];
 
   buildInputs = libintlOrEmpty;
 
-  nativeBuildInputs = [ pkgconfig perl ];
+  nativeBuildInputs = [ pkgconfig perl gobjectIntrospection ];
 
-  propagatedBuildInputs = [ glib gobjectIntrospection /*ToDo: why propagate*/ ];
+  propagatedBuildInputs = [
+    # Required by atk.pc
+    glib
+  ];
 
-  #doCheck = true; # no checks in there (2.10.0)
+  doCheck = true;
+
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+    };
+  };
 
   meta = {
     description = "Accessibility toolkit";
@@ -39,7 +48,7 @@ stdenv.mkDerivation rec {
 
     license = stdenv.lib.licenses.lgpl2Plus;
 
-    maintainers = with stdenv.lib.maintainers; [ raskin urkud ];
+    maintainers = with stdenv.lib.maintainers; [ raskin ];
     platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
   };
 

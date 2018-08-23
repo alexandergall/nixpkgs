@@ -1,17 +1,21 @@
+# pcre functionality is tested in nixos/tests/php-pcre.nix
+
 { lib, stdenv, fetchurl, composableDerivation, autoconf, automake, flex, bison
 , mysql, libxml2, readline, zlib, curl, postgresql, gettext
-, openssl, pkgconfig, sqlite, config, libjpeg, libpng, freetype
+, openssl, pcre, pkgconfig, sqlite, config, libjpeg, libpng, freetype
 , libxslt, libmcrypt, bzip2, icu, openldap, cyrus_sasl, libmhash, freetds
-, uwimap, pam, gmp, apacheHttpd }:
+, uwimap, pam, gmp, apacheHttpd, libiconv, systemd, libsodium }:
 
 let
 
   generic =
     { version, sha256 }:
 
-    let php7 = lib.versionAtLeast version "7.0"; in
+    let php7 = lib.versionAtLeast version "7.0";
+        mysqlndSupport = config.php.mysqlnd or false;
+        mysqlBuildInputs = lib.optional (!mysqlndSupport) mysql.connector-c;
 
-    composableDerivation.composableDerivation {} (fixed: {
+    in composableDerivation.composableDerivation {} (fixed: {
 
       inherit version;
 
@@ -19,9 +23,11 @@ let
 
       enableParallelBuilding = true;
 
-      buildInputs = [ flex bison pkgconfig ];
+      nativeBuildInputs = [ pkgconfig ];
+      buildInputs = [ flex bison pcre ]
+        ++ lib.optional stdenv.isLinux systemd;
 
-      configureFlags = ["EXTENSION_DIR=$(out)/lib/php/extensions"];
+      CXXFLAGS = lib.optional stdenv.cc.isClang "-std=c++11";
 
       flags = {
 
@@ -32,6 +38,10 @@ let
         apxs2 = {
           configureFlags = ["--with-apxs2=${apacheHttpd.dev}/bin/apxs"];
           buildInputs = [apacheHttpd];
+        };
+
+        embed = {
+          configureFlags = ["--enable-embed"];
         };
 
         # Extensions
@@ -45,13 +55,13 @@ let
 
         ldap = {
           configureFlags = [
-            "--with-ldap"
+            "--with-ldap=/invalid/path"
             "LDAP_DIR=${openldap.dev}"
             "LDAP_INCDIR=${openldap.dev}/include"
             "LDAP_LIBDIR=${openldap.out}/lib"
-            "--with-ldap-sasl=${cyrus_sasl.dev}"
+            (lib.optional stdenv.isLinux "--with-ldap-sasl=${cyrus_sasl.dev}")
             ];
-          buildInputs = [openldap cyrus_sasl openssl];
+          buildInputs = [openldap openssl] ++ lib.optional stdenv.isLinux cyrus_sasl;
         };
 
         mhash = {
@@ -60,7 +70,7 @@ let
         };
 
         curl = {
-          configureFlags = ["--with-curl=${curl}"];
+          configureFlags = ["--with-curl=${curl.dev}"];
           buildInputs = [curl openssl];
         };
 
@@ -69,7 +79,7 @@ let
         };
 
         zlib = {
-          configureFlags = ["--with-zlib=${zlib}"];
+          configureFlags = ["--with-zlib=${zlib.dev}"];
           buildInputs = [zlib];
         };
 
@@ -85,12 +95,12 @@ let
         };
 
         readline = {
-          configureFlags = ["--with-readline=${readline}"];
+          configureFlags = ["--with-readline=${readline.dev}"];
           buildInputs = [ readline ];
         };
 
         sqlite = {
-          configureFlags = ["--with-pdo-sqlite=${sqlite}"];
+          configureFlags = ["--with-pdo-sqlite=${sqlite.dev}"];
           buildInputs = [ sqlite ];
         };
 
@@ -105,13 +115,13 @@ let
         };
 
         mysql = {
-          configureFlags = ["--with-mysql=${mysql.lib}"];
-          buildInputs = [ mysql.lib ];
+          configureFlags = ["--with-mysql${if mysqlndSupport then "=mysqlnd" else ""}"];
+          buildInputs = mysqlBuildInputs;
         };
 
         mysqli = {
-          configureFlags = ["--with-mysqli=${mysql.lib}/bin/mysql_config"];
-          buildInputs = [ mysql.lib ];
+          configureFlags = ["--with-mysqli=${if mysqlndSupport then "mysqlnd" else "${mysql.connector-c}/bin/mysql_config"}"];
+          buildInputs = mysqlBuildInputs;
         };
 
         mysqli_embedded = {
@@ -121,8 +131,8 @@ let
         };
 
         pdo_mysql = {
-          configureFlags = ["--with-pdo-mysql=${mysql.lib}"];
-          buildInputs = [ mysql.lib ];
+          configureFlags = ["--with-pdo-mysql=${if mysqlndSupport then "mysqlnd" else mysql.connector-c}"];
+          buildInputs = mysqlBuildInputs;
         };
 
         bcmath = {
@@ -133,15 +143,15 @@ let
           # FIXME: Our own gd package doesn't work, see https://bugs.php.net/bug.php?id=60108.
           configureFlags = [
             "--with-gd"
-            "--with-freetype-dir=${freetype}"
-            "--with-png-dir=${libpng}"
-            "--with-jpeg-dir=${libjpeg}"
+            "--with-freetype-dir=${freetype.dev}"
+            "--with-png-dir=${libpng.dev}"
+            "--with-jpeg-dir=${libjpeg.dev}"
           ];
           buildInputs = [ libpng libjpeg freetype ];
         };
 
         gmp = {
-          configureFlags = ["--with-gmp=${gmp}"];
+          configureFlags = ["--with-gmp=${gmp.dev}"];
           buildInputs = [ gmp ];
         };
 
@@ -154,8 +164,8 @@ let
         };
 
         openssl = {
-          configureFlags = ["--enable-openssl"];
-          buildInputs = [openssl];
+          configureFlags = ["--with-openssl"];
+          buildInputs = [openssl openssl.dev];
         };
 
         mbstring = {
@@ -177,7 +187,7 @@ let
         };
 
         xsl = {
-          configureFlags = ["--with-xsl=${libxslt}"];
+          configureFlags = ["--with-xsl=${libxslt.dev}"];
           buildInputs = [libxslt];
         };
 
@@ -187,7 +197,7 @@ let
         };
 
         bz2 = {
-          configureFlags = ["--with-bz2=${bzip2}"];
+          configureFlags = ["--with-bz2=${bzip2.dev}"];
           buildInputs = [bzip2];
         };
 
@@ -215,17 +225,23 @@ let
         calendar = {
           configureFlags = ["--enable-calendar"];
         };
+
+        sodium = {
+          configureFlags = ["--with-sodium=${libsodium.dev}"];
+          buildInputs = [libsodium];
+        };
       };
 
       cfg = {
-        imapSupport = config.php.imap or true;
+        imapSupport = config.php.imap or (!stdenv.isDarwin);
         ldapSupport = config.php.ldap or true;
         mhashSupport = config.php.mhash or true;
         mysqlSupport = (!php7) && (config.php.mysql or true);
         mysqliSupport = config.php.mysqli or true;
         pdo_mysqlSupport = config.php.pdo_mysql or true;
         libxml2Support = config.php.libxml2 or true;
-        apxs2Support = config.php.apxs2 or true;
+        apxs2Support = config.php.apxs2 or (!stdenv.isDarwin);
+        embedSupport = config.php.embed or false;
         bcmathSupport = config.php.bcmath or true;
         socketsSupport = config.php.sockets or true;
         curlSupport = config.php.curl or true;
@@ -253,11 +269,14 @@ let
         mssqlSupport = (!php7) && (config.php.mssql or (!stdenv.isDarwin));
         ztsSupport = config.php.zts or false;
         calendarSupport = config.php.calendar or true;
+        sodiumSupport = (lib.versionAtLeast version "7.2") && config.php.sodium or true;
       };
 
-      configurePhase = ''
+      hardeningDisable = [ "bindnow" ];
+
+      preConfigure = ''
         # Don't record the configure flags since this causes unnecessary
-        # runtime dependencies.
+        # runtime dependencies
         for i in main/build-defs.h.in scripts/php-config.in; do
           substituteInPlace $i \
             --replace '@CONFIGURE_COMMAND@' '(omitted)' \
@@ -265,14 +284,30 @@ let
             --replace '@PHP_LDFLAGS@' ""
         done
 
-        iniFile=$out/etc/php-recommended.ini
-        [[ -z "$libxml2" ]] || export PATH=$PATH:$libxml2/bin
-        ./configure --with-config-file-scan-dir=/etc --with-config-file-path=$out/etc --prefix=$out $configureFlags
+        #[[ -z "$libxml2" ]] || addToSearchPath PATH $libxml2/bin
+
+        export EXTENSION_DIR=$out/lib/php/extensions
+
+        configureFlags+=(--with-config-file-path=$out/etc \
+          --includedir=$dev/include)
       '';
 
-      installPhase = ''
-        unset installPhase; installPhase;
-        cp php.ini-production $iniFile
+      configureFlags = [
+        "--with-config-file-scan-dir=/etc/php.d"
+        "--with-pcre-regex=${pcre.dev} PCRE_LIBDIR=${pcre}"
+      ] ++ lib.optional stdenv.isDarwin "--with-iconv=${libiconv}"
+        ++ lib.optional stdenv.isLinux  "--with-fpm-systemd";
+
+      postInstall = ''
+        cp php.ini-production $out/etc/php.ini
+      '';
+
+      postFixup = ''
+        mkdir -p $dev/bin $dev/share/man/man1
+        mv $out/bin/phpize $out/bin/php-config $dev/bin/
+        mv $out/share/man/man1/phpize.1.gz \
+          $out/share/man/man1/php-config.1.gz \
+          $dev/share/man/man1/
       '';
 
       src = fetchurl {
@@ -283,29 +318,42 @@ let
       meta = with stdenv.lib; {
         description = "An HTML-embedded scripting language";
         homepage = http://www.php.net/;
-        license = stdenv.lib.licenses.php301;
-        maintainers = with maintainers; [ globin ];
+        license = licenses.php301;
+        maintainers = with maintainers; [ globin etu ];
+        platforms = platforms.all;
+        outputsToInstall = [ "out" "dev" ];
       };
 
       patches = if !php7 then [ ./fix-paths.patch ] else [ ./fix-paths-php7.patch ];
 
+      postPatch = lib.optional stdenv.isDarwin ''
+        substituteInPlace configure --replace "-lstdc++" "-lc++"
+      '';
+
+      stripDebugList = "bin sbin lib modules";
+
+      outputs = [ "out" "dev" ];
+
     });
 
 in {
-
-  php55 = generic {
-    version = "5.5.34";
-    sha256 = "0745wn0qg9rqibwr948bzc719s7pywizvl1ahkg1j9m92r28i25g";
-  };
-
   php56 = generic {
-    version = "5.6.20";
-    sha256 = "07xz48dz1ijwq45vh90jfzdd56k0s5ppi3j5rwc9p9y7mrybziss";
+    version = "5.6.34";
+    sha256 = "1kgjgkabhrm8ksmh6j3m59vm85n401mcn7inh03hnjzfijflk7z1";
   };
 
   php70 = generic {
-    version = "7.0.5";
-    sha256 = "1s8xnnxwq5big2rnbp3w7zw7wh5d5ra9p2q9bxwylds5wrzsy29c";
+    version = "7.0.28";
+    sha256 = "0zrw0saqlfv60f3nmff7288wqfhdsfiqns4ys3ii0drzc6s92m5f";
   };
 
+  php71 = generic {
+    version = "7.1.15";
+    sha256 = "1gfw3ab9pvv034l9xk7ry23xsdz9vcwksrvmzkjmsj79713sa5z1";
+  };
+
+  php72 = generic {
+    version = "7.2.3";
+    sha256 = "14mzsp6ysjgc7f6vl0z0j996qf8n75yh0aga121dsr571fn5lwsa";
+  };
 }

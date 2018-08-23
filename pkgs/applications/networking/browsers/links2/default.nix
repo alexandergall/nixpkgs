@@ -8,18 +8,19 @@
 }:
 
 stdenv.mkDerivation rec {
-  version = "2.12";
+  version = "2.14";
   name = "links2-${version}";
 
   src = fetchurl {
     url = "${meta.homepage}/download/links-${version}.tar.bz2";
-    sha256 = "0knq15yrp60s4jh92aacw8yfc2pcv3bqsw7dba7h5s6ivq8ihhcq";
+    sha256 = "1f24y83wa1vzzjq5kp857gjqdpnmf8pb29yw7fam0m8wxxw0c3gp";
   };
 
-  buildInputs =
-    [ libev librsvg libpng libjpeg libtiff gpm openssl xz bzip2 zlib ]
-    ++ stdenv.lib.optionals enableX11 [ libX11 libXau libXt ]
-    ++ stdenv.lib.optional enableDirectFB [ directfb ];
+  buildInputs = with stdenv.lib;
+    [ libev librsvg libpng libjpeg libtiff openssl xz bzip2 zlib ]
+    ++ optionals stdenv.isLinux [ gpm ]
+    ++ optionals enableX11 [ libX11 libXau libXt ]
+    ++ optional enableDirectFB [ directfb ];
 
   nativeBuildInputs = [ pkgconfig bzip2 ];
 
@@ -29,16 +30,10 @@ stdenv.mkDerivation rec {
     ++ stdenv.lib.optional enableFB "--with-fb"
     ++ stdenv.lib.optional enableDirectFB "--with-directfb";
 
-  crossAttrs = {
-    preConfigure = ''
-      export CC=$crossConfig-gcc
-    '';
-  };
-
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://links.twibright.com/;
     description = "A small browser with some graphics support";
-    maintainers = with stdenv.lib.maintainers; [ raskin urkud viric ];
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ raskin viric ];
+    platforms = platforms.unix;
   };
 }

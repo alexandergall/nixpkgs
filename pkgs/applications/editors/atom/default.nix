@@ -1,50 +1,44 @@
-{ stdenv, fetchurl, buildEnv, makeDesktopItem, makeWrapper, zlib, glib, alsaLib
-, dbus, gtk, atk, pango, freetype, fontconfig, libgnome_keyring3, gdk_pixbuf
-, gvfs, cairo, cups, expat, libgpgerror, nspr, gconf, nss, xorg, libcap, systemd
-}:
+{ stdenv, pkgs, fetchurl, lib, makeWrapper, gvfs, atomEnv}:
 
-let
-  atomEnv = buildEnv {
-    name = "env-atom";
-    paths = [
-      stdenv.cc.cc zlib glib dbus gtk atk pango freetype libgnome_keyring3
-      fontconfig gdk_pixbuf cairo cups expat libgpgerror alsaLib nspr gconf nss
-      xorg.libXrender xorg.libX11 xorg.libXext xorg.libXdamage xorg.libXtst
-      xorg.libXcomposite xorg.libXi xorg.libXfixes xorg.libXrandr
-      xorg.libXcursor libcap systemd
-    ];
-  };
-in stdenv.mkDerivation rec {
+stdenv.mkDerivation rec {
   name = "atom-${version}";
-  version = "1.6.2";
+  version = "1.24.0";
 
   src = fetchurl {
     url = "https://github.com/atom/atom/releases/download/v${version}/atom-amd64.deb";
-    sha256 = "1kl2pc0smacn4lgk5wwlaiw03rm8b0763vaisgp843p35zzsbc9n";
+    sha256 = "1yvwz4lkf7ya775h3fvrg1wkdc30321j666vfjlmax5mbcjrxkzf";
     name = "${name}.deb";
   };
 
-  buildInputs = [ atomEnv gvfs makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  phases = [ "installPhase" "fixupPhase" ];
-
-  installPhase = ''
-    mkdir -p $out
-    ar p $src data.tar.gz | tar -C $out -xz ./usr
+  buildCommand = ''
+    mkdir -p $out/usr/
+    ar p $src data.tar.xz | tar -C $out -xJ ./usr
     substituteInPlace $out/usr/share/applications/atom.desktop \
       --replace /usr/share/atom $out/bin
     mv $out/usr/* $out/
     rm -r $out/share/lintian
     rm -r $out/usr/
+    wrapProgram $out/bin/atom \
+      --prefix "PATH" : "${gvfs}/bin"
+
+    fixupPhase
+
     patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+      --set-rpath "${atomEnv.libPath}:$out/share/atom" \
       $out/share/atom/atom
     patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+      --set-rpath "${atomEnv.libPath}" \
       $out/share/atom/resources/app/apm/bin/node
-    wrapProgram $out/bin/atom \
-      --prefix "LD_LIBRARY_PATH" : "${atomEnv}/lib:${atomEnv}/lib64" \
-      --prefix "PATH" : "${gvfs}/bin"
-    wrapProgram $out/bin/apm \
-      --prefix "LD_LIBRARY_PATH" : "${atomEnv}/lib:${atomEnv}/lib64"
+
+    rm -f $out/share/atom/resources/app.asar.unpacked/node_modules/dugite/git/bin/git
+    ln -s ${pkgs.git}/bin/git $out/share/atom/resources/app.asar.unpacked/node_modules/dugite/git/bin/git
+
+    find $out/share/atom -name "*.node" -exec patchelf --set-rpath "${atomEnv.libPath}:$out/share/atom" {} \;
+
+    paxmark m $out/share/atom/atom
+    paxmark m $out/share/atom/resources/app/apm/bin/node
   '';
 
   meta = with stdenv.lib; {

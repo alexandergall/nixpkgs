@@ -21,7 +21,7 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ SDL freetype ];
 
-  postInstall = "ln -s $out/include/SDL/SDL_ttf.h $out/include/";
+  configureFlags = stdenv.lib.optional stdenv.isDarwin "--disable-sdltest";
 
   meta = with stdenv.lib; {
     description = "SDL TrueType library";

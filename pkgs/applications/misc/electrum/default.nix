@@ -1,74 +1,81 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ stdenv, fetchurl, python3, python3Packages, zbar, fetchpatch }:
 
-let
-  jsonrpclib = pythonPackages.buildPythonPackage rec {
-    version = "0.1.7";
-    name = "jsonrpclib-${version}";
-    src = fetchurl {
-      url = "https://pypi.python.org/packages/source/j/jsonrpclib/${name}.tar.gz";
-      sha256 = "02vgirw2bcgvpcxhv5hf3yvvb4h5wzd1lpjx8na5psdmaffj6l3z";
-    };
-    propagatedBuildInputs = [ pythonPackages.cjson ];
-    meta = {
-      homepage = https://pypi.python.org/pypi/jsonrpclib;
-      license = stdenv.lib.licenses.asl20;
-    };
-  };
-in
-
-pythonPackages.buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   name = "electrum-${version}";
-  version = "2.6.3";
+  version = "3.0.6";
 
   src = fetchurl {
     url = "https://download.electrum.org/${version}/Electrum-${version}.tar.gz";
-    sha256 = "0lj3a8zg6dznpnnxyza8a05c13py52j62rqlad1zcgksm5g63vic";
+    sha256 = "01dnqiazjl2avrmdiq68absjvcfv24446y759z2s9dwk8ywzjkrg";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
-    dns
+  patches = [
+    # Trezor compat patch should be included in electrum > 3.0.6
+    (fetchpatch {
+      name = "trezor-compat.patch";
+      url = "https://patch-diff.githubusercontent.com/raw/spesmilo/electrum/pull/3621.patch";
+      sha256 = "1bk1r2ikhnvw1fpfh71y4za2lnskcbkv50k8ynjxi5slx2wrfpl0";
+    })
+  ];
+
+  propagatedBuildInputs = with python3Packages; [
+    dnspython
     ecdsa
-    jsonrpclib
+    jsonrpclib-pelix
+    matplotlib
     pbkdf2
     protobuf
-    pyasn1
-    pyasn1-modules
+    pyaes
     pycrypto
-    pyqt4
+    pyqt5
+    pysocks
     qrcode
     requests
-    slowaes
     tlslite
 
     # plugins
-    trezor
     keepkey
+    trezor
+
     # TODO plugins
-    # matplotlib
-    # btchip
     # amodem
+    # btchip
   ];
 
-  preInstall = ''
-    mkdir -p $out/share
-    sed -i 's@usr_share = .*@usr_share = os.getenv("out")+"/share"@' setup.py
-    pyrcc4 icons.qrc -o gui/qt/icons_rc.py
+  preBuild = ''
+    sed -i 's,usr_share = .*,usr_share = "'$out'/share",g' setup.py
+    pyrcc5 icons.qrc -o gui/qt/icons_rc.py
+    # Recording the creation timestamps introduces indeterminism to the build
+    sed -i '/Created: .*/d' gui/qt/icons_rc.py
+    sed -i "s|name = 'libzbar.*'|name='${zbar}/lib/libzbar.so'|" lib/qrscanner.py
   '';
 
-  doCheck = true;
-  checkPhase = ''
+  postInstall = ''
+    # Despite setting usr_share above, these files are installed under
+    # $out/nix ...
+    mv $out/${python3.sitePackages}/nix/store"/"*/share $out
+    rm -rf $out/${python3.sitePackages}/nix
+
+    substituteInPlace $out/share/applications/electrum.desktop \
+      --replace "Exec=electrum %u" "Exec=$out/bin/electrum %u"
+  '';
+
+  doCheck = false;
+
+  doInstallCheck = true;
+  installCheckPhase = ''
     $out/bin/electrum help >/dev/null
   '';
 
   meta = with stdenv.lib; {
-    description = "Bitcoin thin-client";
+    description = "A lightweight Bitcoin wallet";
     longDescription = ''
       An easy-to-use Bitcoin client featuring wallets generated from
       mnemonic seeds (in addition to other, more advanced, wallet options)
       and the ability to perform transactions without downloading a copy
       of the blockchain.
     '';
-    homepage = https://electrum.org;
+    homepage = https://electrum.org/;
     license = licenses.mit;
     maintainers = with maintainers; [ ehmry joachifm np ];
   };

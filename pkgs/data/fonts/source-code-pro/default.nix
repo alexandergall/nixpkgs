@@ -1,29 +1,24 @@
-{ stdenv, fetchFromGitHub }:
+{ stdenv, fetchzip }:
 
-stdenv.mkDerivation rec {
+let
+  version = "2.030";
+in fetchzip {
   name = "source-code-pro-${version}";
-  version = "2.010";
 
-  src = fetchFromGitHub {
-    owner = "adobe-fonts";
-    repo = "source-code-pro";
-    rev = "2.010R-ro/1.030R-it";
-    name = "2.010R-ro-1.030R-it";
-    sha256 = "0f40g23lfcajpd5m9r1z7v8x011dsfs6ba7fihjal6yzaf5hb6mh";
-  };
+  url = https://github.com/adobe-fonts/source-code-pro/archive/2.030R-ro/1.050R-it.zip;
 
-  phases = "unpackPhase installPhase";
-
-  installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    find . -name "*.otf" -exec cp {} $out/share/fonts/opentype \;
+  postFetch = ''
+    mkdir -p $out/share/fonts
+    unzip -j $downloadedFile \*.otf -d $out/share/fonts/opentype
   '';
+
+  sha256 = "0d8qwzjgnz264wlm4qim048z3236z4hbblvc6yplw13f6b65j6fv";
 
   meta = {
     description = "A set of monospaced OpenType fonts designed for coding environments";
     maintainers = with stdenv.lib.maintainers; [ relrod ];
     platforms = with stdenv.lib.platforms; all;
-    homepage = "http://blog.typekit.com/2012/09/24/source-code-pro/";
+    homepage = https://blog.typekit.com/2012/09/24/source-code-pro/;
     license = stdenv.lib.licenses.ofl;
   };
 }

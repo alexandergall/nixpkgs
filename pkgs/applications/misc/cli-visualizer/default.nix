@@ -1,26 +1,33 @@
-{ stdenv, fetchgit, fftw, ncurses, libpulseaudio }:
+{ stdenv, fetchFromGitHub, fftw, ncurses5, libpulseaudio, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  version = "2016-06-02";
+  version = "1.6";
   name = "cli-visualizer-${version}";
 
-  src = fetchgit {
-    url = "https://github.com/dpayne/cli-visualizer.git";
-    rev = "bc0104eb57e7a0b3821510bc8f93cf5d1154fa8e";
-    sha256 = "7b0c69a16b4854149522e2d0ec544412fb368cecba771d1e9481330ed86c8cb7";
+  src = fetchFromGitHub {
+    owner = "dpayne";
+    repo = "cli-visualizer";
+    rev = version;
+    sha256 = "0mirp8bk398di5xyq95iprmdyvplfghxqmrfj7jdnpy554vx7ppc";
   };
 
-  buildInputs = [ fftw ncurses libpulseaudio ];
+  postPatch = ''
+    sed '1i#include <cmath>' -i src/Transformer/SpectrumCircleTransformer.cpp
+  '';
+
+  buildInputs = [ fftw ncurses5 libpulseaudio makeWrapper ];
 
   buildFlags = [ "ENABLE_PULSE=1" ];
 
   installPhase = ''
     mkdir -p $out/bin
     cp build/vis $out/bin/vis
+    # See https://github.com/dpayne/cli-visualizer/issues/62#issuecomment-330738075
+    wrapProgram $out/bin/vis --set TERM rxvt-256color
   '';
 
   meta = {
-    homepage = "https://github.com/dpayne/cli-visualizer";
+    homepage = https://github.com/dpayne/cli-visualizer;
     description = "CLI based audio visualizer";
     license = stdenv.lib.licenses.mit;
     maintainers = [ stdenv.lib.maintainers.matthiasbeyer ];

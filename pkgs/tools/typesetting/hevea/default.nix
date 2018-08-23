@@ -1,14 +1,14 @@
-{ stdenv, fetchurl, ocaml }:
+{ stdenv, fetchurl, ocamlPackages }:
 
 stdenv.mkDerivation rec {
-  name = "hevea-2.28";
+  name = "hevea-2.31";
 
   src = fetchurl {
     url = "http://pauillac.inria.fr/~maranget/hevea/distri/${name}.tar.gz";
-    sha256 = "14fns13wlnpiv9i05841kvi3cq4b9v2sw5x3ff6ziws28q701qnd";
+    sha256 = "15xrnnqlacz8dpr09h7jgijm65wss99rmy9mb1zmapplmwhavmzv";
   };
 
-  buildInputs = [ ocaml ];
+  buildInputs = with ocamlPackages; [ ocaml ocamlbuild ];
 
   makeFlags = "PREFIX=$(out)";
 
@@ -17,5 +17,6 @@ stdenv.mkDerivation rec {
     homepage = http://pauillac.inria.fr/~maranget/hevea/;
     license = licenses.qpl;
     maintainers = with maintainers; [ pSub ];
+    platforms = with platforms; unix;
   };
 }

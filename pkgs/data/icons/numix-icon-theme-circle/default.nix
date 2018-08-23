@@ -1,28 +1,32 @@
-{ stdenv, fetchFromGitHub, unzip }:
+{ stdenv, fetchFromGitHub, gtk3, numix-icon-theme }:
 
 stdenv.mkDerivation rec {
-  version = "e7008b488edfe37379ba9c4b8d5245dfd6125fc3";
+  version = "18-02-16";
 
   package-name = "numix-icon-theme-circle";
-  
-  name = "${package-name}-20160121-${version}";
 
-  buildInputs = [ unzip ];
-  
+  name = "${package-name}-${version}";
+
   src = fetchFromGitHub {
     owner = "numixproject";
     repo = package-name;
     rev = version;
-    sha256 = "0pfcz50b9g7zzskws94m6wvd8zm3sjvhpbzq9vjqi1q02nzflap6";
+    sha256 = "0q08q1czsk6h0dxqscbgryr12xaakp4zbch37z0jxpwh087gnq4f";
   };
 
-  dontBuild = true;
+  nativeBuildInputs = [ gtk3 numix-icon-theme ];
 
   installPhase = ''
     install -dm 755 $out/share/icons
     cp -dr --no-preserve='ownership' Numix-Circle{,-Light} $out/share/icons/
   '';
-  
+
+  postFixup = ''
+    for theme in $out/share/icons/*; do
+      gtk-update-icon-cache $theme
+    done
+  '';
+
   meta = with stdenv.lib; {
     description = "Numix icon theme (circle version)";
     homepage = https://numixproject.org;

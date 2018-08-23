@@ -4,30 +4,29 @@ with pkgs;
 with lib;
 
 let
-
   uid = config.ids.uids.mopidy;
   gid = config.ids.gids.mopidy;
   cfg = config.services.mopidy;
 
   mopidyConf = writeText "mopidy.conf" cfg.configuration;
 
-  mopidyEnv = python.buildEnv.override {
-    extraLibs = [ mopidy ] ++ cfg.extensionPackages;
+  mopidyEnv = buildEnv {
+    name = "mopidy-with-extensions-${mopidy.version}";
+    paths = closePropagation cfg.extensionPackages;
+    pathsToLink = [ "/${python.sitePackages}" ];
+    buildInputs = [ makeWrapper ];
+    postBuild = ''
+      makeWrapper ${mopidy}/bin/mopidy $out/bin/mopidy \
+        --prefix PYTHONPATH : $out/${python.sitePackages}
+    '';
   };
-
 in {
 
   options = {
 
     services.mopidy = {
 
-      enable = mkOption {
-        default = false;
-        type = types.bool;
-        description = ''
-          Whether to enable Mopidy, a music player daemon.
-        '';
-      };
+      enable = mkEnableOption "Mopidy, a music player daemon";
 
       dataDir = mkOption {
         default = "/var/lib/mopidy";
@@ -47,6 +46,7 @@ in {
       };
 
       configuration = mkOption {
+        default = "";
         type = types.lines;
         description = ''
           The configuration that Mopidy should use.
@@ -65,7 +65,6 @@ in {
     };
 
   };
-
 
   ###### implementation
 

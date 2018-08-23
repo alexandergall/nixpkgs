@@ -1,9 +1,16 @@
-{ system ? builtins.currentSystem }:
+let maybePkgs = import ../../../../../. {}; in
+
+{ stdenv     ? maybePkgs.stdenv
+, runCommand ? maybePkgs.runCommand
+, fetchurl   ? maybePkgs.fetchurl
+, writeText  ? maybePkgs.writeText
+, curl       ? maybePkgs.curl
+, cacert     ? maybePkgs.cacert
+, nix        ? maybePkgs.nix
+}:
 
 let
-  inherit (import ../../../../../. {
-    inherit system;
-  }) lib runCommand fetchurl writeText stdenv curl cacert nix;
+  inherit (stdenv) lib;
 
   sources = if builtins.pathExists ./upstream-info.nix
             then import ./upstream-info.nix
@@ -57,7 +64,7 @@ in rec {
     csv2nix = name: src: import (runCommand "${name}.nix" {
       src = builtins.fetchurl src;
     } ''
-      esc() { echo "\"$(echo "$1" | sed -e 's/"\\$/\\&/')\""; }
+      esc() { echo "\"$(echo "$1" | sed -e 's/"\\$/\\&/')\""; } # ohai emacs "
       IFS=, read -r -a headings <<< "$(head -n1 "$src")"
       echo "[" > "$out"
       tail -n +2 "$src" | while IFS=, read -r -a line; do
@@ -138,7 +145,7 @@ in rec {
         outputHashMode = "flat";
         outputHashAlgo = "md5";
 
-        buildInputs = [ curl ];
+        nativeBuildInputs = [ curl ];
         preferLocalBuild = true;
 
         buildCommand = ''
@@ -150,9 +157,7 @@ in rec {
           fi
         '';
 
-        impureEnvVars = [
-          "http_proxy" "https_proxy" "ftp_proxy" "all_proxy" "no_proxy"
-        ];
+        impureEnvVars = lib.fetchers.proxyImpureEnvVars;
       };
 
     in {
@@ -173,7 +178,7 @@ in rec {
 
     getHash = path: import (runCommand "gethash.nix" {
       inherit path;
-      buildInputs = [ nix ];
+      nativeBuildInputs = [ nix ];
     } ''
       sha256="$(nix-hash --flat --base32 --type sha256 "$path")"
       echo "\"$sha256\"" > "$out"

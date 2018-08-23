@@ -1,31 +1,47 @@
-{ stdenv, fetchFromGitHub, fetchFromBitbucket, pkgconfig, tcl, readline, libffi, python3, bison, flex }:
+{ stdenv, fetchFromGitHub, fetchFromBitbucket
+, pkgconfig, tcl, readline, libffi, python3, bison, flex
+}:
+
+with builtins;
 
 stdenv.mkDerivation rec {
   name = "yosys-${version}";
-  version = "2015.12.29";
+  version = "2018.02.14";
 
   srcs = [
     (fetchFromGitHub {
-      owner = "cliffordwolf";
-      repo = "yosys";
-      rev = "1d62f8710f04fec405ef79b9e9a4a031afcf7d42";
-      sha256 = "0q1dk9in3gmrihb58pjckncx56lj7y4b6y34jgb68f0fh91fdvfx";
-      name = "yosys";
+      owner  = "yosyshq";
+      repo   = "yosys";
+      rev    = "c1abd3b02cab235334342f3520e2535eb74c5792";
+      sha256 = "0pzrplv4p0qzy115rg19lxv4w274iby337zfd7hhlinnpx3gzqvw";
+      name   = "yosys";
     })
+
+    # NOTE: the version of abc used here is synchronized with
+    # the one in the yosys Makefile of the version above;
+    # keep them the same for quality purposes.
     (fetchFromBitbucket {
-      owner = "alanmi";
-      repo = "abc";
-      rev = "c3698e053a7a";
-      sha256 = "05p0fvbr7xvb6w3d7j2r6gynr3ljb6r5q6jvn2zs3ysn2b003qwd";
-      name = "abc";
+      owner  = "alanmi";
+      repo   = "abc";
+      rev    = "6e3c24b3308a";
+      sha256 = "1i4wv0si4fb6dpv2yrpkp588mdlfrnx2s02q2fgra5apdm54c53w";
+      name   = "yosys-abc";
     })
   ];
   sourceRoot = "yosys";
 
-  buildInputs = [ pkgconfig tcl readline libffi python3 bison flex ];
+  enableParallelBuilding = true;
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ tcl readline libffi python3 bison flex ];
+
+  patchPhase = ''
+    substituteInPlace ./Makefile \
+      --replace 'echo UNKNOWN' 'echo ${substring 0 10 (elemAt srcs 0).rev}'
+  '';
+
   preBuild = ''
-    chmod -R u+w ../abc
-    ln -s ../abc abc
+    chmod -R u+w ../yosys-abc
+    ln -s ../yosys-abc abc
     make config-gcc
     echo 'ABCREV := default' >> Makefile.conf
     makeFlags="PREFIX=$out $makeFlags"
@@ -37,14 +53,14 @@ stdenv.mkDerivation rec {
       Yosys is a framework for RTL synthesis tools. It currently has
       extensive Verilog-2005 support and provides a basic set of
       synthesis algorithms for various application domains.
-
       Yosys can be adapted to perform any synthesis job by combining
       the existing passes (algorithms) using synthesis scripts and
       adding additional passes as needed by extending the yosys C++
       code base.
     '';
-    homepage = http://www.clifford.at/yosys/;
-    license = stdenv.lib.licenses.isc;
-    maintainers = [ stdenv.lib.maintainers.shell ];
+    homepage    = http://www.clifford.at/yosys/;
+    license     = stdenv.lib.licenses.isc;
+    maintainers = with stdenv.lib.maintainers; [ shell thoughtpolice ];
+    platforms   = stdenv.lib.platforms.linux;
   };
 }

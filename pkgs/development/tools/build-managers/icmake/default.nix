@@ -1,19 +1,22 @@
-{ stdenv, fetchFromGitHub, gcc5 }:
+{ stdenv, fetchFromGitHub, gcc }:
 
 stdenv.mkDerivation rec {
   name = "icmake-${version}";
-  version = "8.01.00";
+  version = "9.02.06";
 
   src = fetchFromGitHub {
-    sha256 = "1vgjywbc4w1agkakfndr2qf0z0ncxisihdv8sz9ipry9f170np39";
+    sha256 = "1hs7fhqpkhlrjvjhfarf5bmxl8dw3r0immzdib27gwh3sfzgpx0b";
     rev = version;
     repo = "icmake";
     owner = "fbb-git";
   };
 
-  sourceRoot = "icmake-${version}-src/icmake";
 
-  buildInputs = [ gcc5 ];
+  setSourceRoot = ''
+    sourceRoot=$(echo */icmake)
+  '';
+
+  buildInputs = [ gcc ];
 
   preConfigure = ''
     patchShebangs ./
@@ -33,7 +36,7 @@ stdenv.mkDerivation rec {
     description = "A program maintenance (make) utility using a C-like grammar";
     homepage = https://fbb-git.github.io/icmake/;
     license = licenses.gpl3;
-    maintainers = with maintainers; [ nckx pSub ];
+    maintainers = with maintainers; [ pSub ];
     platforms = platforms.linux;
   };
 }

@@ -27,7 +27,7 @@ stdenv.mkDerivation rec {
       BB_MP3DEC=${mpg123}/bin/mpg123 \
       BB_OGGENC=${vorbis-tools}/bin/oggenc \
       BB_OGGDEC=${vorbis-tools}/bin/oggdec \
-      BB_FLACCMD=${flac}/bin/flac \
+      BB_FLACCMD=${flac.bin}/bin/flac \
       BB_EJECT=${utillinux}/bin/eject \
       BB_NORMCMD=${normalize}/bin/normalize \
     ; do
@@ -44,7 +44,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    description = "bash script CD Burner Writer";
+    description = "Bash script CD Burner Writer";
     longDescription = ''
       It might not be the best looking application out there, but it works.
       It’s simple, fast and small, and can handle most things you throw at it.
@@ -59,6 +59,5 @@ stdenv.mkDerivation rec {
     homepage = http://bashburn.dose.se/;
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

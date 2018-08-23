@@ -1,59 +1,52 @@
 { stdenv, fetchurl, intltool, pkgconfig, libglade, networkmanager, gnome3
-, libnotify, libsecret, dbus_glib, polkit, isocodes
-, mobile_broadband_provider_info, glib_networking, gsettings_desktop_schemas
-, makeWrapper, udev, libgudev, hicolor_icon_theme }:
-
-let
-  pn = "network-manager-applet";
-  major = "1.0";
-  # With version 1.0.12 of NM, we are no longer in sync
-  # version = "${networkmanager.version}.10";
-  version = "${major}.10";
-in
+, libnotify, libsecret, polkit, isocodes, modemmanager
+, mobile-broadband-provider-info, glib-networking, gsettings-desktop-schemas
+, udev, libgudev, hicolor-icon-theme, jansson, wrapGAppsHook, webkitgtk
+, libindicator-gtk3, libappindicator-gtk3, withGnome ? false }:
 
 stdenv.mkDerivation rec {
-  name = "network-manager-applet-${version}";
+  name    = "${pname}-${major}.${minor}";
+  pname   = "network-manager-applet";
+  major   = "1.8";
+  minor   = "6";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pn}/${major}/${name}.tar.xz";
-    sha256 = "1szh5jyijxm6z55irkp5s44pwah0nikss40mx7pvpk38m8zaqidh";
+    url    = "mirror://gnome/sources/${pname}/${major}/${name}.tar.xz";
+    sha256 = "0c4wxwxpa7wlskvnqaqfa7mmc0c6a2pj7jcvymcchjnq4wn9wx01";
   };
 
-  configureFlags = [ "--sysconfdir=/etc" ];
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--without-selinux"
+    "--with-appindicator"
+  ];
+
+  outputs = [ "out" "dev" ];
 
   buildInputs = [
-    gnome3.gtk libglade networkmanager libnotify libsecret dbus_glib gsettings_desktop_schemas
-    polkit isocodes makeWrapper udev libgudev gnome3.gconf gnome3.libgnome_keyring
-  ];
+    gnome3.gtk libglade networkmanager libnotify libsecret gsettings-desktop-schemas
+    polkit isocodes udev libgudev gnome3.libgnome-keyring
+    modemmanager jansson glib-networking
+    libindicator-gtk3 libappindicator-gtk3
+  ] ++ stdenv.lib.optional withGnome webkitgtk;
 
-  nativeBuildInputs = [ intltool pkgconfig ];
+  nativeBuildInputs = [ intltool pkgconfig wrapGAppsHook ];
 
-  propagatedUserEnvPkgs = [ gnome3.gconf gnome3.gnome_keyring hicolor_icon_theme ];
+  propagatedUserEnvPkgs = [ gnome3.gnome-keyring hicolor-icon-theme ];
 
   makeFlags = [
-    ''CFLAGS=-DMOBILE_BROADBAND_PROVIDER_INFO=\"${mobile_broadband_provider_info}/share/mobile-broadband-provider-info/serviceproviders.xml\"''
+    ''CFLAGS=-DMOBILE_BROADBAND_PROVIDER_INFO=\"${mobile-broadband-provider-info}/share/mobile-broadband-provider-info/serviceproviders.xml\"''
   ];
 
-  preInstall =
-    ''
-      installFlagsArray=( "sysconfdir=$out/etc" )
-    '';
-
-  preFixup = ''
-    wrapProgram "$out/bin/nm-applet" \
-      --prefix GIO_EXTRA_MODULES : "${glib_networking.out}/lib/gio/modules:${gnome3.dconf}/lib/gio/modules" \
-      --prefix XDG_DATA_DIRS : "${gnome3.gtk}/share:$out/share:$GSETTINGS_SCHEMAS_PATH" \
-      --set GCONF_CONFIG_SOURCE "xml::~/.gconf" \
-      --prefix PATH ":" "${gnome3.gconf}/bin"
-    wrapProgram "$out/bin/nm-connection-editor" \
-      --prefix XDG_DATA_DIRS : "${gnome3.gtk}/share:$out/share:$GSETTINGS_SCHEMAS_PATH"
+  preInstall = ''
+    installFlagsArray=( "sysconfdir=$out/etc" )
   '';
 
   meta = with stdenv.lib; {
-    homepage = http://projects.gnome.org/NetworkManager/;
+    homepage    = http://projects.gnome.org/NetworkManager/;
     description = "NetworkManager control applet for GNOME";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ phreedom urkud rickynils ];
-    platforms = platforms.linux;
+    license     = licenses.gpl2;
+    maintainers = with maintainers; [ phreedom rickynils ];
+    platforms   = platforms.linux;
   };
 }

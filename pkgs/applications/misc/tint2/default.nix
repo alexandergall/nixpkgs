@@ -1,42 +1,43 @@
-{ stdenv, fetchFromGitLab, pkgconfig, cmake, pango, cairo, glib, imlib2, libXinerama
-, libXrender, libXcomposite, libXdamage, libX11, libXrandr, gtk, libpthreadstubs
-, libXdmcp, librsvg, libstartup_notification
+{ stdenv, fetchFromGitLab, pkgconfig, cmake, gettext, cairo, pango, pcre
+, glib, imlib2, gtk2, libXinerama, libXrender, libXcomposite, libXdamage
+, libX11, libXrandr, librsvg, libpthreadstubs, libXdmcp
+, libstartup_notification, hicolor-icon-theme, wrapGAppsHook
 }:
 
 stdenv.mkDerivation rec {
   name = "tint2-${version}";
-  version = "0.12.7";
+  version = "16.2";
 
   src = fetchFromGitLab {
     owner = "o9000";
     repo = "tint2";
     rev = version;
-    sha256 = "01wb1yy7zfi01fl34yzpn1d30fykcf8ivmdlynnxp5znqrdsqm2r";
+    sha256 = "1fp9kamb09qbply8jn0gqwgnv9xdds81jzpl0lkziz8dydyis4wm";
   };
 
   enableParallelBuilding = true;
 
-  buildInputs = [ pkgconfig cmake pango cairo glib imlib2 libXinerama
-    libXrender libXcomposite libXdamage libX11 libXrandr gtk libpthreadstubs
-    libXdmcp librsvg libstartup_notification
-  ];
+  nativeBuildInputs = [ pkgconfig cmake gettext wrapGAppsHook ];
 
-  preConfigure =
-    ''
-      substituteInPlace CMakeLists.txt --replace /etc $out/etc
-    '';
+  buildInputs = [ cairo pango pcre glib imlib2 gtk2 libXinerama libXrender
+    libXcomposite libXdamage libX11 libXrandr librsvg libpthreadstubs
+    libXdmcp libstartup_notification hicolor-icon-theme ];
 
-  prePatch =
-    ''
-      substituteInPlace ./src/tint2conf/properties.c --replace /usr/share/ /run/current-system/sw/share/
-      substituteInPlace ./src/launcher/apps-common.c --replace /usr/share/ /run/current-system/sw/share/
-      substituteInPlace ./src/launcher/icon-theme-common.c --replace /usr/share/ /run/current-system/sw/share/
-    '';
+  postPatch = ''
+    substituteInPlace CMakeLists.txt --replace /etc $out/etc
+    for f in ./src/launcher/apps-common.c \
+             ./src/launcher/icon-theme-common.c \
+             ./themes/*tint2rc
+    do
+      substituteInPlace $f --replace /usr/share/ /run/current-system/sw/share/
+    done
+  '';
 
   meta = {
     homepage = https://gitlab.com/o9000/tint2;
+    description = "Simple panel/taskbar unintrusive and light (memory, cpu, aestetic)";
     license = stdenv.lib.licenses.gpl2;
-    description = "A simple panel/taskbar unintrusive and light (memory / cpu / aestetic)";
     platforms = stdenv.lib.platforms.linux;
+    maintainers = [ stdenv.lib.maintainers.romildo ];
   };
 }

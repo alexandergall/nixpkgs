@@ -73,8 +73,8 @@ let
 
           for p in $out/bin/*; do
             wrapProgram $p \
-              --suffix LD_LIBRARY_PATH ';' "${lib.makeSearchPath "lib" runtimeDeps_}" \
-              --suffix PATH ';' "${lib.makeSearchPath "bin" runtimeDeps_}" \
+              --suffix LD_LIBRARY_PATH ';' "${lib.makeLibraryPath runtimeDeps_}" \
+              --suffix PATH ';' "${lib.makeBinPath runtimeDeps_}" \
               --suffix LUA_PATH ';' "\"$LUA_PATH\"" \
               --suffix LUA_PATH ';' "\"$out/share/lua/${lua.luaversion}/?.lua;$out/share/lua/${lua.luaversion}/?/init.lua\"" \
               --suffix LUA_CPATH ';' "\"$LUA_CPATH\"" \
@@ -105,6 +105,7 @@ let
       installPhase = ''
         make install-extra $makeFlags
       '';
+      meta.broken = true;
     };
 
     luafilesystem = buildLuaRocks {
@@ -123,6 +124,7 @@ let
     luaffifb = buildLuaRocks {
       name = "luaffifb";
       src = "${distro_src}/extra/luaffifb";
+      meta.broken = true;
     };
 
     sundown = buildLuaRocks rec {
@@ -267,6 +269,7 @@ let
       preBuild = ''
         export Torch_DIR=${torch}/share/cmake/torch
       '';
+      meta.broken = true;
     };
 
     trepl = buildLuaRocks rec {

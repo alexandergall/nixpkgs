@@ -1,31 +1,31 @@
-{ stdenv, fetchurl, zlib, boost, protobuf, ncurses, pkgconfig, IOTty
-, makeWrapper, perl, openssl, autoreconfHook, fetchpatch }:
+{ stdenv, fetchurl, zlib, protobuf, ncurses, pkgconfig, IOTty
+, makeWrapper, perl, openssl, autoreconfHook, openssh, bash-completion }:
 
 stdenv.mkDerivation rec {
-  name = "mosh-1.2.5";
+  name = "mosh-1.3.2";
 
   src = fetchurl {
-    url = "http://mosh.mit.edu/${name}.tar.gz";
-    sha256 = "1qsb0y882yfgwnpy6f98pi5xqm6kykdsrxzvaal37hs7szjhky0s";
+    url = "https://mosh.org/${name}.tar.gz";
+    sha256 = "05hjhlp6lk8yjcy59zywpf0r6s0h0b9zxq0lw66dh9x8vxrhaq6s";
   };
 
-  buildInputs = [ autoreconfHook boost protobuf ncurses zlib pkgconfig IOTty makeWrapper perl openssl ];
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [ protobuf ncurses zlib IOTty makeWrapper perl openssl bash-completion ];
 
-  patches = [
-    # remove automake detection macro patch on next release as it is already on mosh master
-    (fetchpatch {
-      name = "fix_automake_detection_macro.patch";
-      url = "https://github.com/mobile-shell/mosh/commit/a47917b97606a03f6bbf0cafd1fcd495b0229790.patch";
-      sha256 = "0ib200ffvbnns125xd58947fyxdx31m06rmnzqmxpxcnjza7k404";
-    })
-  ];
+  patches = [ ./ssh_path.patch ];
+  postPatch = ''
+    substituteInPlace scripts/mosh.pl \
+        --subst-var-by ssh "${openssh}/bin/ssh"
+  '';
+
+  configureFlags = [ "--enable-completion" ];
 
   postInstall = ''
       wrapProgram $out/bin/mosh --prefix PERL5LIB : $PERL5LIB
   '';
 
   meta = {
-    homepage = http://mosh.mit.edu/;
+    homepage = https://mosh.org/;
     description = "Mobile shell (ssh replacement)";
     longDescription = ''
       Remote terminal application that allows roaming, supports intermittent

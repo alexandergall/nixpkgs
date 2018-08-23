@@ -1,23 +1,9 @@
-{ stdenv, fetchurl, fetchpatch, autoreconfHook }:
+{ stdenv, fetchurl, fetchpatch, autoreconfHook, ghostscript }:
 
-let version = "9.18";
-in
 stdenv.mkDerivation {
-  name = "ijs-${version}";
+  name = "ijs-${ghostscript.version}";
 
-  src = fetchurl {
-    url = "http://downloads.ghostscript.com/public/ghostscript-${version}.tar.bz2";
-    sha256 = "18ad90za28dxybajqwf3y3dld87cgkx1ljllmcnc7ysspfxzbnl3";
-  };
-
-  patches = [
-    # http://bugs.ghostscript.com/show_bug.cgi?id=696246
-    (fetchpatch {
-      name = "devijs-account-for-device-subclassing.patch";
-      url = "http://git.ghostscript.com/?p=ghostpdl.git;a=patch;h=b68e05c3";
-      sha256 = "1c3fzfjzvf15z533vpw3l3da8wcxw98qi3p1lc6lf13940a57c7n";
-    })
-  ];
+  inherit (ghostscript) src;
 
   postPatch = "cd ijs";
 

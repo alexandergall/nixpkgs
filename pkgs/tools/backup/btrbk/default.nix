@@ -1,27 +1,23 @@
-{ stdenv, fetchurl, coreutils, bash, btrfs-progs, perl, perlPackages, makeWrapper }:
+{ stdenv, fetchurl, coreutils, bash, btrfs-progs, openssh, perl, perlPackages
+, asciidoc-full, makeWrapper }:
 
 stdenv.mkDerivation rec {
   name = "btrbk-${version}";
-  version = "0.22.2";
+  version = "0.26.0";
 
   src = fetchurl {
     url = "http://digint.ch/download/btrbk/releases/${name}.tar.xz";
-    sha256 = "1gbgi0dp62wlw7y72pgxjs6byxkrk73g35kqxzw0gjf32r5i4sb8";
+    sha256 = "1brnh5x3fd91j3v8rz3van08m9i0ym4lv4hqz274s86v1kx4k330";
   };
 
-  patches = [
-    # https://github.com/digint/btrbk/pull/74
-    ./btrbk-Prefix-PATH-instead-of-resetting-it.patch
-    # https://github.com/digint/btrbk/pull/73
-    ./btrbk-mail-Use-btrbk-instead-of-unbound-variable-btr.patch
-  ];
-
-  buildInputs = with perlPackages; [ makeWrapper perl DateCalc ];
+  buildInputs = with perlPackages; [ asciidoc-full makeWrapper perl DateCalc ];
 
   preInstall = ''
-    substituteInPlace Makefile \
-      --replace "/usr" "$out" \
-      --replace "/etc" "$out/etc"
+    for f in $(find . -name Makefile); do
+      substituteInPlace "$f" \
+        --replace "/usr" "$out" \
+        --replace "/etc" "$out/etc"
+    done
 
     # Tainted Mode disables PERL5LIB
     substituteInPlace btrbk --replace "perl -T" "perl"
@@ -33,12 +29,10 @@ stdenv.mkDerivation rec {
       --replace '$btrbk' 'btrbk'
   '';
 
-  fixupPhase = ''
-    patchShebangs $out/
-
+  preFixup = ''
     wrapProgram $out/sbin/btrbk \
       --set PERL5LIB $PERL5LIB \
-      --prefix PATH ':' "${btrfs-progs}/bin:${bash}/bin/"
+      --prefix PATH ':' "${stdenv.lib.makeBinPath [ btrfs-progs bash openssh ]}"
   '';
 
   meta = with stdenv.lib; {

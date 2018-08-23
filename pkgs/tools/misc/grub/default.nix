@@ -34,7 +34,10 @@ stdenv.mkDerivation {
   ] ++ (stdenv.lib.optional buggyBiosCDSupport ./buggybios.patch);
 
   # autoreconfHook required for the splashimage patch.
-  buildInputs = [ autoreconfHook texinfo ];
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ texinfo ];
+
+  hardeningDisable = [ "stackprotector" ];
 
   prePatch = ''
     unpackFile $gentooPatches

@@ -1,14 +1,14 @@
-{ stdenv, fetchFromGitHub }:
+{ stdenv, fetchFromGitHub, utillinux }:
 
 stdenv.mkDerivation rec {
   name = "mcelog-${version}";
-  version = "135";
+  version = "154";
 
   src = fetchFromGitHub {
-    sha256 = "1bkbcb2zz7x7q893f1r8bm783jb3v7ww1yqys1hmqzn40hdwfr8p";
-    rev = "v${version}";
-    repo = "mcelog";
-    owner = "andikleen";
+    owner  = "andikleen";
+    repo   = "mcelog";
+    rev    = "v${version}";
+    sha256 = "0vq7r3zknr62rmi9g0zd7mmxframm79vmrdw029pc7z6wrlv40cy";
   };
 
   postPatch = ''
@@ -18,11 +18,21 @@ stdenv.mkDerivation rec {
     touch mcelog.conf.5 # avoid regeneration requiring Python
 
     substituteInPlace Makefile --replace '"unknown"' '"${version}"'
+
+    for i in triggers/*; do
+      substituteInPlace $i --replace 'logger' '${utillinux}/bin/logger'
+    done
   '';
 
   enableParallelBuilding = true;
 
   installFlags = [ "DESTDIR=$(out)" "prefix=" "DOCDIR=/share/doc" ];
+
+  postInstall = ''
+    mkdir -p $out/lib/systemd/system
+    substitute mcelog.service $out/lib/systemd/system/mcelog.service \
+      --replace /usr/sbin $out/bin
+  '';
 
   meta = with stdenv.lib; {
     description = "Log x86 machine checks: memory, IO, and CPU hardware errors";
@@ -37,6 +47,5 @@ stdenv.mkDerivation rec {
     homepage = http://mcelog.org/;
     license = licenses.gpl2;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

@@ -1,5 +1,5 @@
 { stdenv, fetchgit, glib, readline, bison, flex, pkgconfig,
-  libiconv, autoreconfHook, which, txt2man, gnome_doc_utils, scrollkeeper }:
+  libiconv, autoreconfHook, which, txt2man, gnome-doc-utils, scrollkeeper }:
 
 stdenv.mkDerivation {
   name = "mdbtools-git-2014-07-25";
@@ -7,12 +7,13 @@ stdenv.mkDerivation {
   src = fetchgit {
     url = "http://github.com/brianb/mdbtools.git";
     rev = "9ab40e83e6789015c965c92bdb62f92f8cdd0dbd";
-    sha256 = "18j1a9y9xhl7hhx30zvmx2n4w7dc8c7sdr6722sf3mh5230mvv59";
+    sha256 = "0hlf5lk86xm0bpdlpk4a1zyfvbim76dhvmybxga2p7mbb1jc825l";
   };
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    glib readline bison flex autoreconfHook pkgconfig which txt2man
-    gnome_doc_utils scrollkeeper libiconv
+    glib readline bison flex autoreconfHook which txt2man
+    gnome-doc-utils scrollkeeper libiconv
   ];
 
   preAutoreconf = ''
@@ -27,5 +28,6 @@ stdenv.mkDerivation {
 
   meta = {
     description = ".mdb (MS Access) format tools";
+    platforms = stdenv.lib.platforms.linux;
   };
 }

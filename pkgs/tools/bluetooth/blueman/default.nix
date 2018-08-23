@@ -1,5 +1,6 @@
 { stdenv, lib, fetchurl, intltool, pkgconfig, pythonPackages, bluez, polkit, gtk3
-, obex_data_server, xdg_utils, libnotify, dconf, gsettings_desktop_schemas, dnsmasq, dhcp
+, obex_data_server, xdg_utils, libnotify, dnsmasq, dhcp
+, hicolor-icon-theme, librsvg, wrapGAppsHook, gobjectIntrospection
 , withPulseAudio ? true, libpulseaudio }:
 
 let
@@ -7,40 +8,41 @@ let
 
 in stdenv.mkDerivation rec {
   name = "blueman-${version}";
-  version = "2.0.3";
-   
+  version = "2.0.5";
+
   src = fetchurl {
     url = "https://github.com/blueman-project/blueman/releases/download/${version}/${name}.tar.xz";
-    sha256 = "09aqlk4c2qzqpmyf7b40sic7d45c1l8fyrb9f3s22b8w83j0adi4";
+    sha256 = "1jl83z56c01ypvv98mxn74kpbv58yrccggp1rbmnw1dnvjxvjbic";
   };
 
-  nativeBuildInputs = [ intltool pkgconfig pythonPackages.wrapPython pythonPackages.cython ];
+  nativeBuildInputs = [
+    gobjectIntrospection intltool pkgconfig pythonPackages.cython
+    pythonPackages.wrapPython wrapGAppsHook
+  ];
 
-  buildInputs = [ bluez gtk3 pythonPackages.python libnotify dconf gsettings_desktop_schemas ]
+  buildInputs = [ bluez gtk3 pythonPackages.python libnotify librsvg hicolor-icon-theme ]
                 ++ pythonPath
                 ++ lib.optional withPulseAudio libpulseaudio;
 
   postPatch = lib.optionalString withPulseAudio ''
-    sed -i 's,CDLL(",CDLL("${libpulseaudio}/lib/,g' blueman/main/PulseAudioUtils.py
+    sed -i 's,CDLL(",CDLL("${libpulseaudio.out}/lib/,g' blueman/main/PulseAudioUtils.py
   '';
 
-  pythonPath = with pythonPackages; [ dbus pygobject3 ];
+  pythonPath = with pythonPackages; [ dbus-python pygobject3 pycairo ];
 
-  propagatedUserEnvPkgs = [ obex_data_server dconf ];
+  propagatedUserEnvPkgs = [ obex_data_server ];
 
   configureFlags = [ (lib.enableFeature withPulseAudio "pulseaudio") ];
 
   postFixup = ''
-    makeWrapperArgs="\
-      --prefix PATH ':' ${binPath} \
-      --prefix GI_TYPELIB_PATH : $GI_TYPELIB_PATH \
-      --prefix XDG_DATA_DIRS : $GSETTINGS_SCHEMAS_PATH \
-      --prefix GIO_EXTRA_MODULES : ${dconf}/lib/gio/modules"
-    wrapPythonPrograms
+    makeWrapperArgs="--prefix PATH ':' ${binPath}"
+    # This mimics ../../../development/interpreters/python/wrap.sh
+    wrapPythonProgramsIn "$out/bin" "$out $pythonPath"
+    wrapPythonProgramsIn "$out/libexec" "$out $pythonPath"
   '';
 
   meta = with lib; {
-    homepage = https://github.com/blueman-project;
+    homepage = https://github.com/blueman-project/blueman;
     description = "GTK+-based Bluetooth Manager";
     license = licenses.gpl3;
     platforms = platforms.linux;

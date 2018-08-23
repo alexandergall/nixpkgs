@@ -1,52 +1,66 @@
-{ stdenv, fetchurl, wxGTK, pkgconfig, gettext, gtk, glib, zlib, perl, intltool,
-  libogg, libvorbis, libmad, alsaLib, libsndfile, soxr, flac, lame, fetchpatch,
-  expat, libid3tag, ffmpeg, soundtouch /*, portaudio - given up fighting their portaudio.patch */
+{ stdenv, fetchurl, wxGTK30, pkgconfig, file, gettext, gtk2, glib, zlib, perl, intltool,
+  libogg, libvorbis, libmad, libjack2, lv2, lilv, serd, sord, sratom, suil, alsaLib, libsndfile, soxr, flac, lame,
+  expat, libid3tag, ffmpeg, soundtouch, /*, portaudio - given up fighting their portaudio.patch */
+  autoconf, automake, libtool
   }:
 
+with stdenv.lib;
+
 stdenv.mkDerivation rec {
-  version = "2.1.1";
+  version = "2.2.2";
   name = "audacity-${version}";
 
   src = fetchurl {
     url = "https://github.com/audacity/audacity/archive/Audacity-${version}.tar.gz";
-    sha256 = "15c5ff7ac1c0b19b08f4bdcb0f4988743da2f9ed3fab41d6f07600e67cb9ddb6";
+    sha256 = "18q7i77ynihx7xp45lz2lv0k0wrh6736pcrivlpwrxjgbvyqx7km";
   };
-  patches = [(fetchpatch {
-    name = "new-ffmpeg.patch";
-    url = "https://projects.archlinux.org/svntogit/packages.git/plain/trunk"
-      + "/audacity-ffmpeg.patch?h=packages/audacity&id=0c1e35798d4d70692";
-    sha256 = "19fr674mw844zmkp1476yigkcnmb6zyn78av64ccdwi3p68i00rf";
-  })];
-
-  # fix with gcc-5 from http://lists.freebsd.org/pipermail/freebsd-ports-bugs/2012-December/245884.html
-  postPatch = ''
-    substituteInPlace lib-src/libnyquist/nyquist/ffts/src/fftlib.c \
-      --replace 'inline void' 'static inline void'
-  '';
 
   preConfigure = /* we prefer system-wide libs */ ''
-    mv lib-src lib-src-rm
-    mkdir lib-src
-    mv lib-src-rm/{Makefile*,lib-widget-extra,portaudio-v19,portmixer,portsmf,FileDialog,sbsms,libnyquist} lib-src/
-    rm -r lib-src-rm/
+    autoreconf -vi # use system libraries
+
+    # we will get a (possibly harmless) warning during configure without this
+    substituteInPlace configure \
+      --replace /usr/bin/file ${file}/bin/file
   '';
 
-  configureFlags = "--with-libsamplerate";
+  configureFlags = [
+    "--with-libsamplerate"
+  ];
 
+  # audacity only looks for lame and ffmpeg at runtime, so we need to link them in manually
+  NIX_LDFLAGS = [
+    # LAME
+    "-lmp3lame"
+    # ffmpeg
+    "-lavcodec"
+    "-lavdevice"
+    "-lavfilter"
+    "-lavformat"
+    "-lavresample"
+    "-lavutil"
+    "-lpostproc"
+    "-lswresample"
+    "-lswscale"
+  ];
+
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig gettext wxGTK gtk expat alsaLib
-    libsndfile soxr libid3tag
+    file gettext wxGTK30 expat alsaLib
+    libsndfile soxr libid3tag libjack2 lv2 lilv serd sord sratom suil gtk2
     ffmpeg libmad lame libvorbis flac soundtouch
+    autoconf automake libtool # for the preConfigure phase
   ]; #ToDo: detach sbsms
+
+  enableParallelBuilding = true;
 
   dontDisableStatic = true;
   doCheck = false; # Test fails
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Sound editor with graphical UI";
     homepage = http://audacityteam.org/;
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = with stdenv.lib.platforms; linux;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    license = licenses.gpl2Plus;
+    platforms = with platforms; linux;
+    maintainers = with maintainers; [ the-kenny ];
   };
 }

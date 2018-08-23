@@ -1,5 +1,5 @@
-{ titaniumenv, fetchgit, target, androidPlatformVersions ? [ "23" ], tiVersion ? "5.1.2.GA", release ? false
-, rename ? false, stdenv ? null, newBundleId ? null, iosMobileProvisioningProfile ? null, iosCertificate ? null, iosCertificateName ? null, iosCertificatePassword ? null, iosVersion ? "8.1"
+{ titaniumenv, fetchgit, target, androidPlatformVersions ? [ "25" "26" ], tiVersion ? "6.3.1.GA", release ? false
+, rename ? false, stdenv ? null, newBundleId ? null, iosMobileProvisioningProfile ? null, iosCertificate ? null, iosCertificateName ? null, iosCertificatePassword ? null, iosVersion ? "11.2"
 , enableWirelessDistribution ? false, installURL ? null
 }:
 
@@ -8,10 +8,10 @@ assert rename -> (stdenv != null && newBundleId != null && iosMobileProvisioning
 let
   src = fetchgit {
     url = https://github.com/appcelerator/KitchenSink.git;
-    rev = "6e9f509069fafdebfa78e15b2d14f20a27a485cc";
-    sha256 = "0370dc0ca78b96a7e0befbff9cb1c248695e1aff66aceea98043bbb16c5121e6";
+    rev = "ec9edebf35030f61368000a8a9071dd7a0773884";
+    sha256 = "3e020004b73c9c2386f2672fdf9203083295f1524f5e504a07842e062de181c8";
   };
-  
+
   # Rename the bundle id to something else
   renamedSrc = stdenv.mkDerivation {
     name = "KitchenSink-renamedsrc";
@@ -29,14 +29,17 @@ in
 titaniumenv.buildApp {
   name = "KitchenSink-${target}-${if release then "release" else "debug"}";
   src = if rename then renamedSrc else src;
+  preBuild = ''
+    sed -i -e "s|23|25|" tiapp.xml
+  ''; # Raise minimum android SDK from 23 to 25
   inherit tiVersion;
-  
+
   inherit target androidPlatformVersions release;
-  
+
   androidKeyStore = ./keystore;
   androidKeyAlias = "myfirstapp";
   androidKeyStorePassword = "mykeystore";
-  
+
   inherit iosMobileProvisioningProfile iosCertificate iosCertificateName iosCertificatePassword iosVersion;
   inherit enableWirelessDistribution installURL;
 }

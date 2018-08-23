@@ -1,14 +1,16 @@
-{ stdenv, fetchurl, kerberos, keyutils, pam }:
+{ stdenv, fetchurl, autoreconfHook, pkgconfig, kerberos, keyutils, pam, talloc }:
 
 stdenv.mkDerivation rec {
-  name = "cifs-utils-6.4";
+  name = "cifs-utils-${version}";
+  version = "6.7";
 
   src = fetchurl {
     url = "mirror://samba/pub/linux-cifs/cifs-utils/${name}.tar.bz2";
-    sha256 = "1qz6d2xg4z1if0hy7qwyzgcr59l0alkhci6gxgjdldglda967z1q";
+    sha256 = "1ayghnkryy1n1zm5dyvyyr7n3807nsm6glfcbbki5c2a8w91dwmj";
   };
 
-  buildInputs = [ kerberos keyutils pam ];
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [ kerberos keyutils pam talloc ];
 
   makeFlags = "root_sbindir=$(out)/sbin";
 

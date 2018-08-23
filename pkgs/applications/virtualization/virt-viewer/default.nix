@@ -1,29 +1,36 @@
 { stdenv, fetchurl, pkgconfig, intltool, glib, libxml2, gtk3, gtkvnc, gmp
-, libgcrypt, gnupg, cyrus_sasl, shared_mime_info, libvirt, libcap_ng, yajl
-, gsettings_desktop_schemas, makeWrapper, xen, numactl
-, spiceSupport ? true, spice_gtk ? null, spice_protocol ? null, libcap ? null, gdbm ? null
+, libgcrypt, gnupg, cyrus_sasl, shared-mime-info, libvirt, yajl, xen
+, gsettings-desktop-schemas, makeWrapper, libvirt-glib, libcap_ng, numactl
+, libapparmor
+, spiceSupport ? true
+, spice-gtk ? null, spice-protocol ? null, libcap ? null, gdbm ? null
 }:
 
 assert spiceSupport ->
-  spice_gtk != null && spice_protocol != null && libcap != null && gdbm != null;
+  spice-gtk != null && spice-protocol != null && libcap != null && gdbm != null;
 
 with stdenv.lib;
 
 stdenv.mkDerivation rec {
   baseName = "virt-viewer";
-  version = "2.0";
+  version = "6.0";
   name = "${baseName}-${version}";
 
   src = fetchurl {
     url = "http://virt-manager.org/download/sources/${baseName}/${name}.tar.gz";
-    sha256 = "0dylhpk5rq9jz0l1cxs50q2s74z0wingygm1m33bmnmcnny87ig9";
+    sha256 = "1chqrf658niivzfh85cbwkbv9vyg8sv1mv3i31vawkfsfdvvsdwh";
   };
 
+  nativeBuildInputs = [ pkgconfig intltool ];
   buildInputs = [
-    pkgconfig intltool glib libxml2 gtk3 gtkvnc gmp libgcrypt gnupg cyrus_sasl
-    shared_mime_info libvirt libcap_ng yajl gsettings_desktop_schemas makeWrapper
-    xen numactl
-  ] ++ optionals spiceSupport [ spice_gtk spice_protocol libcap gdbm ];
+    glib libxml2 gtk3 gtkvnc gmp libgcrypt gnupg cyrus_sasl shared-mime-info
+    libvirt yajl gsettings-desktop-schemas makeWrapper libvirt-glib
+    libcap_ng numactl libapparmor
+  ] ++ optionals stdenv.isx86_64 [
+    xen
+  ] ++ optionals spiceSupport [
+    spice-gtk spice-protocol libcap gdbm
+  ];
 
   postInstall = ''
     for f in "$out"/bin/*; do

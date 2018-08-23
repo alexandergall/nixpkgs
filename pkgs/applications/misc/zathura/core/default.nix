@@ -1,44 +1,61 @@
-{ stdenv, fetchurl, pkgconfig, gtk, girara, ncurses, gettext, docutils, file, makeWrapper, zathura_icon, sqlite, glib }:
+{ stdenv, fetchurl, makeWrapper, pkgconfig
+, gtk, girara, ncurses, gettext, docutils
+, file, sqlite, glib, texlive, libintlOrEmpty
+, gtk-mac-integration, synctexSupport ? true
+}:
+
+assert synctexSupport -> texlive != null;
+
+with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  version = "0.3.5";
-  name = "zathura-core-${version}";
+  name    = "zathura-core-${version}";
+  version = "0.3.8";
 
   src = fetchurl {
-    url = "http://pwmt.org/projects/zathura/download/zathura-${version}.tar.gz";
-    sha256 = "031kdr10065q14nixc4p58c4rgvrqcmn9x39b19h2357kzabaw9a";
+    url    = "http://pwmt.org/projects/zathura/download/zathura-${version}.tar.gz";
+    sha256 = "0dz5pky3vmf3s2cp2rv1c099gb1s49p9xlgm3ghyy4pzyxc8bgs6";
   };
 
-  buildInputs = [ pkgconfig file gtk girara gettext makeWrapper sqlite glib ];
+  icon = ./icon.xpm;
 
-  NIX_CFLAGS_COMPILE = "-I${glib}/include/gio-unix-2.0";
+  nativeBuildInputs = [
+    pkgconfig
+  ] ++ optional stdenv.isDarwin [ libintlOrEmpty ];
+
+  buildInputs = [
+    file gtk girara
+    gettext makeWrapper sqlite glib
+  ] ++ optional synctexSupport texlive.bin.core
+    ++ optional stdenv.isDarwin [ gtk-mac-integration ];
+
+  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";
 
   makeFlags = [
     "PREFIX=$(out)"
     "RSTTOMAN=${docutils}/bin/rst2man.py"
     "VERBOSE=1"
     "TPUT=${ncurses.out}/bin/tput"
+    (optionalString synctexSupport "WITH_SYNCTEX=1")
   ];
 
   postInstall = ''
     wrapProgram "$out/bin/zathura" \
-      --prefix PATH ":" "${file}/bin" \
+      --prefix PATH ":" "${makeBinPath [ file ]}" \
       --prefix XDG_CONFIG_DIRS ":" "$out/etc"
 
+    install -Dm644 $icon $out/share/pixmaps/pwmt.xpm
     mkdir -pv $out/etc
-    echo "set window-icon ${zathura_icon}" > $out/etc/zathurarc
+    echo "set window-icon $out/share/pixmaps/pwmt.xpm" > $out/etc/zathurarc
+    echo "Icon=pwmt" >> $out/share/applications/zathura.desktop
   '';
 
   meta = {
-    homepage = http://pwmt.org/projects/zathura/;
+    homepage    = http://pwmt.org/projects/zathura/;
     description = "A core component for zathura PDF viewer";
-    license = stdenv.lib.licenses.zlib;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.garbas ];
-
-    # Set lower priority in order to provide user with a wrapper script called
-    # 'zathura' instead of real zathura executable. The wrapper will build
-    # plugin path argument before executing the original.
-    priority = 1;
+    license     = licenses.zlib;
+    platforms   = platforms.unix;
+    maintainers = with maintainers; [ garbas ];
   };
 }

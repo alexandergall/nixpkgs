@@ -1,7 +1,7 @@
 { stdenv, fetchurl, kernel, zlib }:
 
 let
-  version = "0.7";
+  version = "1.0";
 in
 
 stdenv.mkDerivation {
@@ -9,10 +9,12 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     url = "http://www.atoptool.nl/download/netatop-${version}.tar.gz";
-    sha256 = "11v9lvlshn7mwsbr69xrm7gfhxbgdczcf3cf9fssbd9qgv9abifl";
+    sha256 = "1l7xs3hnfbk6h5gdrw1ikfa0fvfpb5vd447xhwfllvicblqyip8b";
   };
 
   buildInputs = [ zlib ];
+
+  hardeningDisable = [ "pic" ];
 
   preConfigure = ''
     patchShebangs mkversion
@@ -32,9 +34,10 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Network monitoring module for atop";
-    homepage = http://www.atoptool.nl/downloadnetatop.php;
+    homepage = https://www.atoptool.nl/downloadnetatop.php;
     license = stdenv.lib.licenses.gpl2;
     platforms = stdenv.lib.platforms.linux;
     maintainers = with stdenv.lib.maintainers; [viric];
+    broken = !stdenv.lib.versionOlder kernel.version "4.13";
   };
 }

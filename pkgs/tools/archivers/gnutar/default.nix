@@ -2,14 +2,12 @@
 
 stdenv.mkDerivation rec {
   name = "gnutar-${version}";
-  version = "1.28";
+  version = "1.30";
 
   src = fetchurl {
-    url = "mirror://gnu/tar/tar-${version}.tar.bz2";
-    sha256 = "0qkm2k9w8z91hwj8rffpjj9v1vhpiriwz4cdj36k9vrgc3hbzr30";
+    url = "mirror://gnu/tar/tar-${version}.tar.xz";
+    sha256 = "1lyjyk8z8hdddsxw0ikchrsfg3i0x3fsh7l63a8jgaz1n7dr5gzi";
   };
-
-  patches = stdenv.lib.optional stdenv.isDarwin ./gnutar-1.28-darwin.patch;
 
   # avoid retaining reference to CF during stdenv bootstrap
   configureFlags = stdenv.lib.optionals stdenv.isDarwin [

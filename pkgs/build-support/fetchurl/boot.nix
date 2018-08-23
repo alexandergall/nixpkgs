@@ -5,10 +5,11 @@ let mirrors = import ./mirrors.nix; in
 { url ? builtins.head urls
 , urls ? []
 , sha256
+, name ? baseNameOf (toString url)
 }:
 
 import <nix/fetchurl.nix> {
-  inherit system sha256;
+  inherit system sha256 name;
 
   url =
     # Handle mirror:// URIs. Since <nix/fetchurl.nix> currently
@@ -16,5 +17,4 @@ import <nix/fetchurl.nix> {
     let m = builtins.match "mirror://([a-z]+)/(.*)" url; in
     if m == null then url
     else builtins.head (mirrors.${builtins.elemAt m 0}) + (builtins.elemAt m 1);
-
 }

@@ -10,9 +10,7 @@ stdenv.mkDerivation rec {
   env = bundlerEnv {
     name = "panamax-ui-gems-${version}";
     inherit ruby;
-    gemset = ./gemset.nix;
-    gemfile = ./Gemfile;
-    lockfile = ./Gemfile.lock;
+    gemdir = ./.;
   };
 
   bundler = args.bundler.override { inherit ruby; };
@@ -20,7 +18,7 @@ stdenv.mkDerivation rec {
   src = fetchgit {
     rev = "refs/tags/v${version}";
     url = "git://github.com/CenturyLinkLabs/panamax-ui";
-    sha256 = "0vwy0gazfx3zkf2bx862jspidgn5p97d3jaq99x38qfhxp554sn9";
+    sha256 = "01k0h0rjqp5arvwxm2xpfxjsag5qw0qqlg7hx4v8f6jsyc4wmjfl";
   };
 
   buildInputs = [ makeWrapper env.ruby openssl sqlite bundler ];
@@ -64,6 +62,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
+    broken = true; # needs ruby 2.1
     homepage = https://github.com/CenturyLinkLabs/panamax-ui;
     description = "The Web GUI for Panamax";
     license = licenses.asl20;

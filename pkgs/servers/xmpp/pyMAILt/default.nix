@@ -24,7 +24,7 @@ stdenv.mkDerivation rec {
     sed -e '/configFiles/iimport os' -i config.py
     cp * $out/share/$name
     cat > $out/bin/pyMAILt <<EOF
-      #! /bin/sh
+      #!${stdenv.shell}
       cd $out/share/${name}
       ./mail.py \"$@\"
     EOF
@@ -34,5 +34,6 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Email transport module for XMPP";
+    platforms = stdenv.lib.platforms.unix;
   };
 }

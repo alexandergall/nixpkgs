@@ -66,16 +66,16 @@ let
       enabled = false;
     }];
 
-    collectd = {
+    collectd = [{
       enabled = false;
-      typesdb = "${pkgs.collectd}/share/collectd/types.db";
+      typesdb = "${pkgs.collectd-data}/share/collectd/types.db";
       database = "collectd_db";
-      port = 25826;
-    };
+      bind-address = ":25826";
+    }];
 
-    opentsdb = {
+    opentsdb = [{
       enabled = false;
-    };
+    }];
 
     continuous_queries = {
       enabled = true;
@@ -149,7 +149,6 @@ in
         type = types.attrs;
       };
     };
-
   };
 
 
@@ -160,7 +159,7 @@ in
     systemd.services.influxdb = {
       description = "InfluxDB Server";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-interfaces.target" ];
+      after = [ "network.target" ];
       serviceConfig = {
         ExecStart = ''${cfg.package}/bin/influxd -config "${configFile}"'';
         User = "${cfg.user}";
@@ -171,6 +170,16 @@ in
         mkdir -m 0770 -p ${cfg.dataDir}
         if [ "$(id -u)" = 0 ]; then chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}; fi
       '';
+      postStart =
+        let
+          scheme = if configOptions.http.https-enabled then "-k https" else "http";
+          bindAddr = (ba: if hasPrefix ":" ba then "127.0.0.1${ba}" else "${ba}")(toString configOptions.http.bind-address);
+        in
+        mkBefore ''
+          until ${pkgs.curl.bin}/bin/curl -s -o /dev/null ${scheme}://${bindAddr}/ping; do
+            sleep 1;
+          done
+        '';
     };
 
     users.extraUsers = optional (cfg.user == "influxdb") {

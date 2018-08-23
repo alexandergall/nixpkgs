@@ -1,12 +1,13 @@
 { stdenv, fetchurl, requireFile, makeWrapper, unzip, jre }:
 
 stdenv.mkDerivation rec {
-  name = "yEd-3.14.4";
+  name = "yEd-${version}";
+  version = "3.17.2";
 
   src = requireFile {
     name = "${name}.zip";
     url = "https://www.yworks.com/en/products/yfiles/yed/";
-    sha256 = "0pm271ss6cq2s6cv9ww92haaq2abkjxd9dvc8d72h6af5awv8xy6";
+    sha256 = "0wpfvd3jqxgjk3xqkamvlg7rk0w0pmrv7srjfqns447ccc3i7qg2";
   };
 
   nativeBuildInputs = [ unzip makeWrapper ];

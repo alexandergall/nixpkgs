@@ -1,22 +1,25 @@
 { stdenv, fetchurl, pkgconfig, gst-plugins-base, bzip2, libva, wayland
-, libdrm, udev, xorg, mesa, yasm, gstreamer, gst-plugins-bad, nasm
-, libvpx
+, libdrm, udev, xorg, libGLU_combined, yasm, gstreamer, gst-plugins-bad, nasm
+, libvpx, python
 }:
 
 stdenv.mkDerivation rec {
   name = "gst-vaapi-${version}";
-  version = "0.6.1";
+  version = "1.12.4";
 
   src = fetchurl {
-    url = "${meta.homepage}/software/vaapi/releases/gstreamer-vaapi/gstreamer-vaapi-${version}.tar.bz2";
-    sha256 = "1cv7zlz5wj6b3acv0pr5cq5wqzd5vcs1lrrlvyl9wrzcnzz8mz1n";
+    url = "${meta.homepage}/src/gstreamer-vaapi/gstreamer-vaapi-${version}.tar.xz";
+    sha256 = "1jg9nvc8000yi2bcl3wn2yh2hwl7yvlwldj6778w8c0z5qj7fb8w";
   };
 
-  nativeBuildInputs = with stdenv.lib; [ pkgconfig bzip2 ];
+  outputs = [ "out" "dev" ];
+
+  nativeBuildInputs = [ pkgconfig bzip2 ];
 
   buildInputs = [
     gstreamer gst-plugins-base gst-plugins-bad libva wayland libdrm udev
-    xorg.libX11 xorg.libXext xorg.libXv xorg.libXrandr xorg.libSM xorg.libICE mesa nasm libvpx
+    xorg.libX11 xorg.libXext xorg.libXv xorg.libXrandr xorg.libSM
+    xorg.libICE libGLU_combined nasm libvpx python
   ];
 
   preConfigure = "
@@ -26,7 +29,7 @@ stdenv.mkDerivation rec {
   configureFlags = "--disable-builtin-libvpx --with-gstreamer-api=1.0";
 
   meta = {
-    homepage = "http://www.freedesktop.org";
+    homepage = https://gstreamer.freedesktop.org;
     license = stdenv.lib.licenses.lgpl21Plus;
     platforms = stdenv.lib.platforms.linux;
     maintainers = with stdenv.lib.maintainers; [ tstrobel ];

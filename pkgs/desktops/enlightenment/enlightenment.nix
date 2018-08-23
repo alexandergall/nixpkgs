@@ -1,47 +1,58 @@
-{ stdenv, fetchurl, pkgconfig, efl, elementary, xcbutilkeysyms, libXrandr, libXdmcp, libxcb,
-libffi, pam, alsaLib, luajit, bzip2, libuuid, libpthreadstubs, gdbm, libcap, mesa_glu
-, xkeyboard_config }:
+{ stdenv, fetchurl, meson, ninja, pkgconfig, gettext, efl,
+  xcbutilkeysyms, libXrandr, libXdmcp, libxcb, libffi, pam, alsaLib,
+  luajit, bzip2, libpthreadstubs, gdbm, libcap, libGLU,
+  xkeyboard_config, pcre
+}:
 
 stdenv.mkDerivation rec {
   name = "enlightenment-${version}";
-  version = "0.20.6";
+  version = "0.22.1";
+
   src = fetchurl {
     url = "http://download.enlightenment.org/rel/apps/enlightenment/${name}.tar.xz";
-    sha256 = "11ahll68nlci214ka05whp5l32hy9lznmcdfqx3hxsmq2p7bl7zj";
+    sha256 = "1q57fz57d0b26z06m1wiq7c1sniwh885b0vs02mk4jgwva46nyr0";
   };
-  buildInputs = [ pkgconfig efl elementary libXdmcp libxcb
-    xcbutilkeysyms libXrandr libffi pam alsaLib luajit bzip2 libuuid
-    libpthreadstubs gdbm ] ++ stdenv.lib.optionals stdenv.isLinux [ libcap ];
-  NIX_CFLAGS_COMPILE = [ "-I${efl}/include/eo-1" "-I${efl}/include/emile-1" "-I${libuuid}/include/uuid" ];
-  preConfigure = ''
-    export USER_SESSION_DIR=$prefix/lib/systemd/user
 
-    substituteInPlace src/modules/xkbswitch/e_mod_parse.c \
-      --replace "/usr/share/X11/xkb/rules/xorg.lst" "${xkeyboard_config}/share/X11/xkb/rules/base.lst"
+  nativeBuildInputs = [
+    meson
+    ninja
+    (pkgconfig.override { vanilla = true; })
+    gettext
+  ];
 
-    substituteInPlace "src/bin/e_import_config_dialog.c" \
-      --replace "e_prefix_bin_get()" "\"${efl}/bin\""
-  '';
+  buildInputs = [
+    efl
+    libXdmcp
+    libxcb
+    xcbutilkeysyms
+    libXrandr
+    libffi
+    pam
+    alsaLib
+    luajit
+    bzip2
+    libpthreadstubs
+    gdbm
+    pcre
+  ] ++
+    stdenv.lib.optionals stdenv.isLinux [ libcap ];
+
+  # Instead of setting owner to root and permissions to setuid/setgid
+  # (which is not allowed for files in /nix/store) of some
+  # enlightenment programs, the file $out/e-wrappers.nix is created,
+  # containing the needed configuration for that purpose. It can be
+  # used in the enlightenment module.
+  patches = [ ./enlightenment.suid-exes.patch ];
+
+  mesonFlags = [ "-Dsystemdunitdir=lib/systemd/user" ];
 
   enableParallelBuilding = true;
 
-  # this is a hack and without this cpufreq module is not working. does the following:
-  #   1. moves the "freqset" binary to "e_freqset",
-  #   2. linkes "e_freqset" to enlightenment/bin so that,
-  #   3. setuidPrograms detects it and makes appropriate stuff to /var/setuid-wrappers/e_freqset,
-  #   4. and finaly, linkes /var/setuid-wrappers/e_freqset to original destination where enlightenment wants it
-  postInstall = ''
-    export CPUFREQ_DIRPATH=`readlink -f $out/lib/enlightenment/modules/cpufreq/linux-gnu-*`;
-    mv $CPUFREQ_DIRPATH/freqset $CPUFREQ_DIRPATH/e_freqset
-    ln -sv $CPUFREQ_DIRPATH/e_freqset $out/bin/e_freqset
-    ln -sv /var/setuid-wrappers/e_freqset $CPUFREQ_DIRPATH/freqset
-  '';
-
-  meta = {
+  meta = with stdenv.lib; {
     description = "The Compositing Window Manager and Desktop Shell";
-    homepage = http://enlightenment.org/;
-    maintainers = with stdenv.lib.maintainers; [ matejc tstrobel ftrvxmtrx ];
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.bsd2;
+    homepage = https://www.enlightenment.org;
+    license = licenses.bsd2;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ matejc tstrobel ftrvxmtrx romildo ];
   };
 }

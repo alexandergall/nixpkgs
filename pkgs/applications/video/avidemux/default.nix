@@ -1,7 +1,11 @@
 { stdenv, lib, fetchurl, cmake, pkgconfig, lndir
-, zlib, gettext, libvdpau, libva, libXv, sqlite, x265
-, yasm, fribidi, gtk3, qt4
+, zlib, gettext, libvdpau, libva, libXv, sqlite
+, yasm, freetype, fontconfig, fribidi
+, makeWrapper, libXext, libGLU, qttools, qtbase
+, alsaLib
+, withX265 ? true, x265
 , withX264 ? true, x264
+, withXvid ? true, xvidcore
 , withLAME ? true, lame
 , withFAAC ? false, faac
 , withVorbis ? true, libvorbis
@@ -9,107 +13,73 @@
 , withFAAD ? true, faad2
 , withOpus ? true, libopus
 , withVPX ? true, libvpx
+, withQT ? true
+, withCLI ? true
+, default ? "qt5"
+, withPlugins ? true
 }:
+
+assert withQT -> qttools != null && qtbase != null;
+assert default != "qt5" -> default == "cli";
+assert !withQT -> default != "qt5";
 
 stdenv.mkDerivation rec {
   name = "avidemux-${version}";
-  version = "2.6.12";
+  version = "2.7.0";
 
   src = fetchurl {
     url = "mirror://sourceforge/avidemux/avidemux/${version}/avidemux_${version}.tar.gz";
-    sha256 = "0nz52yih8sff53inndkh2dba759xjzsh4b8xjww419lcpk0qp6kn";
+    sha256 = "1bf4l9qwxq3smc1mx5pybydc742a4qqsk17z50j9550d9iwnn7gy";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig yasm lndir ];
-  buildInputs = [ zlib gettext libvdpau libva libXv sqlite x265 fribidi gtk3 qt4 ]
-             ++ lib.optional withX264 x264
-             ++ lib.optional withLAME lame
-             ++ lib.optional withFAAC faac
-             ++ lib.optional withVorbis libvorbis
-             ++ lib.optional withPulse libpulseaudio
-             ++ lib.optional withFAAD faad2
-             ++ lib.optional withOpus libopus
-             ++ lib.optional withVPX libvpx
-             ;
+  patches = [ ./dynamic_install_dir.patch ./bootstrap_logging.patch ];
 
-  enableParallelBuilding = false;
-
-  outputs = [ "out" "cli" "gtk" "qt4" ];
-
-  patches = [ ./dynamic_install_dir.patch ];
+  nativeBuildInputs = [ yasm cmake pkgconfig ];
+  buildInputs = [
+    zlib gettext libvdpau libva libXv sqlite fribidi fontconfig
+    freetype alsaLib libXext libGLU makeWrapper
+  ] ++ lib.optional withX264 x264
+    ++ lib.optional withX265 x265
+    ++ lib.optional withXvid xvidcore
+    ++ lib.optional withLAME lame
+    ++ lib.optional withFAAC faac
+    ++ lib.optional withVorbis libvorbis
+    ++ lib.optional withPulse libpulseaudio
+    ++ lib.optional withFAAD faad2
+    ++ lib.optional withOpus libopus
+    ++ lib.optionals withQT [ qttools qtbase ]
+    ++ lib.optional withVPX libvpx;
 
   buildCommand = ''
     unpackPhase
     cd "$sourceRoot"
     patchPhase
 
-    export cmakeFlags="$cmakeFlags -DAVIDEMUX_SOURCE_DIR=$(pwd)"
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${libXext}/lib"
+    ${stdenv.shell} bootStrap.bash \
+      --with-core \
+      ${if withQT then "--with-qt" else "--without-qt"} \
+      ${if withCLI then "--with-cli" else "--without-cli"} \
+      ${if withPlugins then "--with-plugins" else "--without-plugins"}
 
-    function buildOutput() {
-      ( plugin_ui="$1"
-        output_dir="$2"
-        shift 2
-        export cmakeFlags="$cmakeFlags -DPLUGIN_UI=$plugin_ui -DCMAKE_INSTALL_PREFIX=$output_dir"
-        for i in "$@" avidemux_plugins; do
-          ( cd "$i"
-            cmakeConfigurePhase
-            buildPhase
-            installPhase
-          )
-        done
-        rm -rf avidemux_plugins/build
-      )
-    }
+    mkdir $out
+    cp -R install/usr/* $out
 
-    function buildUi() {
-      plugin_ui="$1"
-      output_dir="$2"
-      shift 2
-
-      # Hack to split builds properly
-      mkdir -p $output_dir
-      lndir $out $output_dir
-      buildOutput $plugin_ui $output_dir "$@"
-    }
-
-    function fixupUi() {
-      output_dir="$1"
-      shift
-
-      find $output_dir -lname $out\* -delete
-      find $output_dir -type f | while read -r f; do
-        rpath="$(patchelf --print-rpath $f 2>/dev/null)" || continue
-        new_rpath=""
-        IFS=':' read -ra old_rpath <<< "$rpath"
-        for p in "''${old_rpath[@]}"; do
-          new_rpath="$new_rpath:$p"
-          if [[ $p = $output_dir* ]]; then
-            new_rpath="$new_rpath:$out/''${p#$output_dir}"
-          fi
-        done
-        patchelf --set-rpath "$new_rpath" $f
-        patchelf --shrink-rpath $f
-      done
-    }
-
-    buildOutput COMMON $out avidemux_core
-    buildOutput SETTINGS $out
-    buildUi CLI $cli avidemux/cli
-    buildUi GTK $gtk avidemux/gtk
-    buildUi QT4 $qt4 avidemux/qt4
+    for i in $out/bin/*; do
+      wrapProgram $i \
+        --set ADM_ROOT_DIR $out \
+        --prefix LD_LIBRARY_PATH ":" "${libXext}/lib"
+    done
+    ln -s "$out/bin/avidemux3_${default}" "$out/bin/avidemux"
 
     fixupPhase
-
-    fixupUi $cli
-    fixupUi $gtk
-    fixupUi $qt4
   '';
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://fixounet.free.fr/avidemux/;
     description = "Free video editor designed for simple video editing tasks";
-    maintainers = with stdenv.lib.maintainers; [ viric abbradar ];
-    platforms = with stdenv.lib.platforms; linux;
-    license = stdenv.lib.licenses.gpl2;
+    maintainers = with maintainers; [ viric abbradar ma27 ];
+    platforms = platforms.linux;
+    license = licenses.gpl2;
   };
 }

@@ -3,13 +3,14 @@
 
 # Note: zlib is not required; MySQL can use an internal zlib.
 
-stdenv.mkDerivation rec {
+let
+self = stdenv.mkDerivation rec {
   name = "mysql-${version}";
-  version = "5.5.48";
+  version = "5.5.58";
 
   src = fetchurl {
     url = "mirror://mysql/MySQL-5.5/${name}.tar.gz";
-    sha256 = "10fpzvf6hxvqgaq8paiz8fvhcbbs4qnzqw0svq40bvlyhx2qfgyc";
+    sha256 = "1f890376ld1qapl038sjh2ialdizys3sj96vfn4mqmb1ybx14scv";
   };
 
   patches = if stdenv.isCygwin then [
@@ -48,6 +49,7 @@ stdenv.mkDerivation rec {
     "-DINSTALL_SHAREDIR=share/mysql"
   ];
 
+  NIX_CFLAGS_COMPILE = [ "-fpermissive" ]; # since gcc-7
   NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isLinux "-lgcc_s";
 
   prePatch = ''
@@ -59,10 +61,16 @@ stdenv.mkDerivation rec {
     rm $out/share/man/man1/mysql-test-run.pl.1
   '';
 
-  passthru.mysqlVersion = "5.5";
+  passthru = {
+    client = self;
+    connector-c = self;
+    server = self;
+    mysqlVersion = "5.5";
+  };
 
   meta = {
-    homepage = http://www.mysql.com/;
+    homepage = https://www.mysql.com/;
     description = "The world's most popular open source database";
+    platforms = stdenv.lib.platforms.unix;
   };
-}
+}; in self

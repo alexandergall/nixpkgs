@@ -4,7 +4,11 @@ buildRubyGem rec {
   inherit ruby;
   name = "${gemName}-${version}";
   gemName = "bundler";
-  version = "1.11.2";
-  sha256 = "0s37j1hyngc4shq0in8f9y1knjdqkisdg3dd1mfwgq7n1bz8zan7";
+  version = "1.14.6";
+  source.sha256 = "0h3x2csvlz99v2ryj1w72vn6kixf7rl35lhdryvh7s49brnj0cgl";
   dontPatchShebangs = true;
+
+  postFixup = ''
+    sed -i -e "s/activate_bin_path/bin_path/g" $out/bin/bundle
+  '';
 }

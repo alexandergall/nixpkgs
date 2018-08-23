@@ -3,36 +3,40 @@
 with lib;
 
 let
-
   cfg = config.services.syncthing;
   defaultUser = "syncthing";
-
-in
-
-{
-
+in {
   ###### interface
-
   options = {
-
     services.syncthing = {
 
-      enable = mkOption {
+      enable = mkEnableOption ''
+        Syncthing - the self-hosted open-source alternative
+        to Dropbox and Bittorrent Sync. Initial interface will be
+        available on http://127.0.0.1:8384/.
+      '';
+
+      systemService = mkOption {
         type = types.bool;
-        default = false;
-        description = ''
-          Whether to enable the Syncthing, self-hosted open-source alternative
-          to Dropbox and BittorrentSync. Initial interface will be
-          available on http://127.0.0.1:8384/.
-        '';
+        default = true;
+        description = "Auto launch Syncthing as a system service.";
       };
 
       user = mkOption {
         type = types.string;
         default = defaultUser;
         description = ''
-          Syncthing will be run under this user (user must exist,
-          this can be your user name).
+          Syncthing will be run under this user (user will be created if it doesn't exist.
+          This can be your user name).
+        '';
+      };
+
+      group = mkOption {
+        type = types.string;
+        default = "nogroup";
+        description = ''
+          Syncthing will be run under this group (group will not be created if it doesn't exist.
+          This can be your user name).
         '';
       };
 
@@ -55,6 +59,19 @@ in
         '';
       };
 
+      openDefaultPorts = mkOption {
+        type = types.bool;
+        default = false;
+        example = literalExample "true";
+        description = ''
+          Open the default ports in the firewall:
+            - TCP 22000 for transfers
+            - UDP 21027 for discovery
+          If multiple users are running syncthing on this machine, you will need to manually open a set of ports for each instance and leave this disabled.
+          Alternatively, if are running only a single instance on this machine using the default ports, enable this.
+        '';
+      };
+
       package = mkOption {
         type = types.package;
         default = pkgs.syncthing;
@@ -64,20 +81,30 @@ in
           Syncthing package to use.
         '';
       };
-
-
     };
-
   };
 
+  imports = [
+    (mkRemovedOptionModule ["services" "syncthing" "useInotify"] ''
+      This option was removed because syncthing now has the inotify functionality included under the name "fswatcher".
+      It can be enabled on a per-folder basis through the webinterface.
+    '')
+  ];
 
   ###### implementation
 
   config = mkIf cfg.enable {
 
+    networking.firewall = mkIf cfg.openDefaultPorts {
+      allowedTCPPorts = [ 22000 ];
+      allowedUDPPorts = [ 21027 ];
+    };
+
+    systemd.packages = [ pkgs.syncthing ];
+
     users = mkIf (cfg.user == defaultUser) {
       extraUsers."${defaultUser}" =
-        { group = defaultUser;
+        { group = cfg.group;
           home  = cfg.dataDir;
           createHome = true;
           uid = config.ids.uids.syncthing;
@@ -88,30 +115,30 @@ in
         config.ids.gids.syncthing;
     };
 
-    systemd.services.syncthing =
-      {
+    systemd.services = {
+      syncthing = mkIf cfg.systemService {
         description = "Syncthing service";
-        after    = [ "network.target" ];
-        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
         environment = {
-          STNORESTART = "yes";  # do not self-restart
+          STNORESTART = "yes";
           STNOUPGRADE = "yes";
           inherit (cfg) all_proxy;
         } // config.networking.proxy.envVars;
-
+        wantedBy = [ "multi-user.target" ];
         serviceConfig = {
-          User  = cfg.user;
-          Group = optionalString (cfg.user == defaultUser) defaultUser;
-          PermissionsStartOnly = true;
           Restart = "on-failure";
-          ExecStart = "${pkgs.syncthing}/bin/syncthing -no-browser -home=${cfg.dataDir}";
           SuccessExitStatus = "2 3 4";
           RestartForceExitStatus="3 4";
+          User = cfg.user;
+          Group = cfg.group;
+          PermissionsStartOnly = true;
+          ExecStart = "${cfg.package}/bin/syncthing -no-browser -home=${cfg.dataDir}";
         };
       };
 
-    environment.systemPackages = [ cfg.package ];
-
+      syncthing-resume = {
+        wantedBy = [ "suspend.target" ];
+      };
+    };
   };
-
 }

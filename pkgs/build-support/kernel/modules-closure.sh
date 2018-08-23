@@ -1,7 +1,5 @@
 source $stdenv/setup
 
-set -o pipefail
-
 version=$(cd $kernel/lib/modules && ls -d *)
 
 echo "kernel version is $version"
@@ -33,6 +31,15 @@ for module in $closure; do
     # the whole kernel from being included in the initrd.
     nuke-refs $target
     echo $target >> $out/insmod-list
+done
+
+mkdir -p $out/lib/firmware
+for module in $closure; do
+    for i in $(modinfo -F firmware $module); do
+        mkdir -p "$out/lib/firmware/$(dirname "$i")"
+        echo "firmware for $module: $i"
+        cp "$firmware/lib/firmware/$i" "$out/lib/firmware/$i" 2>/dev/null || if test -z "$allowMissing"; then exit 1; fi
+    done
 done
 
 depmod -b $out -a $version

@@ -1,15 +1,16 @@
 { stdenv, lib, fetchFromGitHub, emscripten }:
 
-let version = "0.8.7"; in
+let version = "0.9.5"; in
 
 stdenv.mkDerivation {
   name = "jsonnet-${version}";
+  version = version;
 
-  srcs = fetchFromGitHub {
+  src = fetchFromGitHub {
     rev = "v${version}";
     owner = "google";
     repo = "jsonnet";
-    sha256 = "0adg7ijz10mc4xs5lfrby5g9sx96icf6cg39hvkh4wqjl85c6i9g";
+    sha256 = "193sa4hdhvml0c32nmdkjii41hbyc5l0zisdn699ar0gaq7yiqan";
   };
 
   buildInputs = [ emscripten ];
@@ -28,8 +29,9 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Purely-functional configuration language that helps you define JSON data";
-    maintainers = [ lib.maintainers.benley ];
+    maintainers = with lib.maintainers; [ benley copumpkin ];
     license = lib.licenses.asl20;
     homepage = https://github.com/google/jsonnet;
+    platforms = lib.platforms.unix;
   };
 }

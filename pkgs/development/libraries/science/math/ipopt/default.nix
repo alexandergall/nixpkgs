@@ -1,17 +1,15 @@
 { stdenv, fetchurl, unzip, openblas, gfortran }:
 
 stdenv.mkDerivation rec {
-  version = "3.12.4";
   name = "ipopt-${version}";
+  version = "3.12.9";
 
   src = fetchurl {
     url = "http://www.coin-or.org/download/source/Ipopt/Ipopt-${version}.zip";
-    sha256 = "0hxmpi3zx5zgv2ijscdvc40xf88hx5if0d9sgch155z70g15wx0l";
+    sha256 = "1fqdjgxh6l1xjvw1ffma7lg92xqg0l8sj02y0zqvbfnx8i47qs9a";
   };
 
-  preConfigure = ''
-     export CXXDEFS="-DHAVE_RAND -DHAVE_CSTRING -DHAVE_CSTDIO"
-  '';
+  CXXDEFS = [ "-DHAVE_RAND" "-DHAVE_CSTRING" "-DHAVE_CSTDIO" ];
 
   configureFlags = [
     "--with-blas-lib=-lopenblas"

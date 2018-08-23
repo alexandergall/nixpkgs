@@ -6,7 +6,11 @@ let
 
   cfg = config.services.xserver.windowManager.awesome;
   awesome = cfg.package;
-
+  getLuaPath = lib : dir : "${lib}/${dir}/lua/${pkgs.luaPackages.lua.luaversion}";
+  makeSearchPath = lib.concatMapStrings (path:
+    " --search " + (getLuaPath path "share") +
+    " --search " + (getLuaPath path "lib")
+  );
 in
 
 {
@@ -46,12 +50,7 @@ in
       { name = "awesome";
         start =
           ''
-            ${concatMapStrings (pkg: ''
-              export LUA_CPATH=$LUA_CPATH''${LUA_CPATH:+;}${pkg}/lib/lua/${awesome.lua.luaversion}/?.so
-              export LUA_PATH=$LUA_PATH''${LUA_PATH:+;}${pkg}/lib/lua/${awesome.lua.luaversion}/?.lua
-            '') cfg.luaModules}
-
-            ${awesome}/bin/awesome &
+            ${awesome}/bin/awesome ${makeSearchPath cfg.luaModules} &
             waitPID=$!
           '';
       };
@@ -59,5 +58,4 @@ in
     environment.systemPackages = [ awesome ];
 
   };
-
 }

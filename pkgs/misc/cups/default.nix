@@ -1,28 +1,36 @@
-{ stdenv, fetchurl, pkgconfig, zlib, libjpeg, libpng, libtiff, pam
-, dbus, acl, gmp, darwin
+{ stdenv, fetchurl, fetchpatch, pkgconfig, removeReferencesTo
+, zlib, libjpeg, libpng, libtiff, pam, dbus, systemd, acl, gmp, darwin
 , libusb ? null, gnutls ? null, avahi ? null, libpaper ? null
 }:
 
 ### IMPORTANT: before updating cups, make sure the nixos/tests/printing.nix test
 ### works at least for your platform.
-let version = "2.1.3"; in
 
 with stdenv.lib;
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "cups-${version}";
+  version = "2.2.6";
 
   passthru = { inherit version; };
 
   src = fetchurl {
-    url = "https://www.cups.org/software/${version}/cups-${version}-source.tar.bz2";
-    sha256 = "1lyl3z01xhg9xb9c8m42398c6h9kw8qr6jwiv8bjdsjab11hv9rn";
+    url = "https://github.com/apple/cups/releases/download/v${version}/cups-${version}-source.tar.gz";
+    sha256 = "16qn41b84xz6khrr2pa2wdwlqxr29rrrkjfi618gbgdkq9w5ff20";
   };
 
-  # FIXME: the cups libraries contains some $out/share strings so can't be split.
-  outputs = [ "dev" "out" "doc" "man" ]; # TODO: above
+  outputs = [ "out" "lib" "dev" "man" ];
 
-  buildInputs = [ pkgconfig zlib libjpeg libpng libtiff libusb gnutls libpaper ]
-    ++ optionals stdenv.isLinux [ avahi pam dbus acl ]
+  patches = [
+    (fetchpatch {
+      url = "https://git.archlinux.org/svntogit/packages.git/plain/trunk/cups-systemd-socket.patch?h=packages/cups";
+      sha256 = "1ddgdlg9s0l2ph6l8lx1m1lx6k50gyxqi3qiwr44ppq1rxs80ny5";
+    })
+  ];
+
+  nativeBuildInputs = [ pkgconfig removeReferencesTo ];
+
+  buildInputs = [ zlib libjpeg libpng libtiff libusb gnutls libpaper ]
+    ++ optionals stdenv.isLinux [ avahi pam dbus systemd acl ]
     ++ optionals stdenv.isDarwin (with darwin; [
       configd apple_sdk.frameworks.ApplicationServices
     ]);
@@ -32,7 +40,7 @@ stdenv.mkDerivation {
   configureFlags = [
     "--localstatedir=/var"
     "--sysconfdir=/etc"
-    "--with-systemd=\${out}/lib/systemd/system"
+    "--with-rundir=/run"
     "--enable-raw-printing"
     "--enable-threads"
   ] ++ optionals stdenv.isLinux [
@@ -42,10 +50,24 @@ stdenv.mkDerivation {
     ++ optional (gnutls != null) "--enable-ssl"
     ++ optional (avahi != null) "--enable-avahi"
     ++ optional (libpaper != null) "--enable-libpaper"
-    ++ optionals stdenv.isDarwin [
-    "--with-bundledir=$out"
-    "--disable-launchd"
-  ];
+    ++ optional stdenv.isDarwin "--disable-launchd";
+
+  preConfigure = ''
+    configureFlagsArray+=(
+      # Put just lib/* and locale into $lib; this didn't work directly.
+      # lib/cups is moved back to $out in postInstall.
+      # Beware: some parts of cups probably don't fully respect these.
+      "--prefix=$lib"
+      "--datadir=$out/share"
+      "--localedir=$lib/share/locale"
+
+      "--with-systemd=$out/lib/systemd/system"
+
+      ${optionalString stdenv.isDarwin ''
+        "--with-bundledir=$out"
+      ''}
+    )
+  '';
 
   installFlags =
     [ # Don't try to write in /var at build time.
@@ -68,15 +90,26 @@ stdenv.mkDerivation {
   enableParallelBuilding = true;
 
   postInstall = ''
+      libexec=${if stdenv.isDarwin then "libexec/cups" else "lib/cups"}
+      moveToOutput $libexec "$out"
+
+      # $lib contains references to $out/share/cups.
+      # CUPS is working without them, so they are not vital.
+      find "$lib" -type f -exec grep -q "$out" {} \; \
+           -printf "removing references from %p\n" \
+           -exec remove-references-to -t "$out" {} +
+
       # Delete obsolete stuff that conflicts with cups-filters.
       rm -rf $out/share/cups/banners $out/share/cups/data/testprint
 
-      mkdir $dev/bin
-      mv $out/bin/cups-config $dev/bin/
+      moveToOutput bin/cups-config "$dev"
+      sed -e "/^cups_serverbin=/s|$lib|$out|" \
+          -i "$dev/bin/cups-config"
 
       # Rename systemd files provided by CUPS
-      for f in $out/lib/systemd/system/*; do
+      for f in "$out"/lib/systemd/system/*; do
         substituteInPlace "$f" \
+          --replace "$lib/$libexec" "$out/$libexec" \
           --replace "org.cups.cupsd" "cups" \
           --replace "org.cups." ""
 
@@ -88,7 +121,7 @@ stdenv.mkDerivation {
       done
     '' + optionalString stdenv.isLinux ''
       # Use xdg-open when on Linux
-      substituteInPlace $out/share/applications/cups.desktop \
+      substituteInPlace "$out"/share/applications/cups.desktop \
         --replace "Exec=htmlview" "Exec=xdg-open"
     '';
 
@@ -96,7 +129,7 @@ stdenv.mkDerivation {
     homepage = https://cups.org/;
     description = "A standards-based printing system for UNIX";
     license = licenses.gpl2; # actually LGPL for the library and GPL for the rest
-    maintainers = with maintainers; [ urkud simons jgeerds ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ jgeerds ];
+    platforms = platforms.unix;
   };
 }

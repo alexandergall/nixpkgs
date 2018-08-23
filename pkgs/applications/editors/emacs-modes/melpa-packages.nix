@@ -4,15 +4,16 @@
 
 To update the list of packages from MELPA,
 
-1. Clone https://github.com/ttuegel/emacs2nix
-2. Clone https://github.com/milkypostman/melpa
-3. Run `./melpa-packages.sh PATH_TO_MELPA_CLONE` from emacs2nix
-4. Copy the new melpa-packages.json file into Nixpkgs
-5. `git commit -m "melpa-packages $(date -Idate)"`
+1. Clone https://github.com/ttuegel/emacs2nix.
+2. Clone https://github.com/milkypostman/melpa.
+3. Run `./melpa-packages.sh --melpa PATH_TO_MELPA_CLONE` from emacs2nix.
+4. Copy the new `melpa-generated.nix` file into Nixpkgs.
+5. Check for evaluation errors: `nix-instantiate ./. -A emacsPackagesNg.melpaPackages`.
+6. `git add pkgs/applications/editors/emacs-modes/melpa-generated.nix && git commit -m "melpa-packages $(date -Idate)"`
 
 */
 
-{ lib }:
+{ lib, external }:
 
 self:
 
@@ -35,9 +36,8 @@ self:
     });
 
     overrides = {
-      ac-php = super.ac-php.override {
-        inherit (self.melpaPackages) company popup;
-      };
+      # Expects bash to be at /bin/bash
+      ac-rtags = markBroken super.ac-rtags;
 
       # upstream issue: mismatched filename
       ack-menu = markBroken super.ack-menu;
@@ -50,17 +50,17 @@ self:
       bufshow = markBroken super.bufshow;
 
       # part of a larger package
+      caml = dontConfigure super.caml;
+
+      # part of a larger package
       # upstream issue: missing package version
       cmake-mode = markBroken (dontConfigure super.cmake-mode);
 
-      # upstream issue: missing file header
-      cn-outline = markBroken super.cn-outline;
+      # Expects bash to be at /bin/bash
+      company-rtags = markBroken super.company-rtags;
 
       # upstream issue: missing file header
       connection = markBroken super.connection;
-
-      # upstream issue: missing file header
-      crux = markBroken super.crux;
 
       # upstream issue: missing file header
       dictionary = markBroken super.dictionary;
@@ -75,6 +75,9 @@ self:
       # upstream issue: missing file header
       elmine = markBroken super.elmine;
 
+      # upstream issue: missing dependency redshank
+      emr = markBroken super.emr;
+
       ess-R-data-view = super.ess-R-data-view.override {
         inherit (self.melpaPackages) ess ctable popup;
       };
@@ -83,8 +86,17 @@ self:
         inherit (self.melpaPackages) ess popup;
       };
 
+      # upstream issue: missing dependency highlight
+      evil-search-highlight-persist = markBroken super.evil-search-highlight-persist;
+
+      # upstream issue: missing dependency highlight
+      floobits  = markBroken super.floobits;
+
       # missing OCaml
       flycheck-ocaml = markBroken super.flycheck-ocaml;
+
+      # Expects bash to be at /bin/bash
+      flycheck-rtags = markBroken super.flycheck-rtags;
 
       # upstream issue: missing file header
       fold-dwim = markBroken super.fold-dwim;
@@ -95,6 +107,9 @@ self:
       # upstream issue: mismatched filename
       helm-lobsters = markBroken super.helm-lobsters;
 
+      # Expects bash to be at /bin/bash
+      helm-rtags = markBroken super.helm-rtags;
+
       # upstream issue: missing file header
       helm-words = markBroken super.helm-words;
 
@@ -103,6 +118,9 @@ self:
 
       # upstream issue: missing file header
       initsplit = markBroken super.initsplit;
+
+      # Expects bash to be at /bin/bash
+      ivy-rtags = markBroken super.ivy-rtags;
 
       # upstream issue: missing file header
       jsfmt = markBroken super.jsfmt;
@@ -113,11 +131,14 @@ self:
       # upstream issue: mismatched filename
       link-hint = markBroken super.link-hint;
 
-      # part of a larger package
-      llvm-mode = dontConfigure super.llvm-mode;
-
       # upstream issue: missing file header
       maxframe = markBroken super.maxframe;
+
+      # version of magit-popup needs to match magit
+      # https://github.com/magit/magit/issues/3286
+      magit = super.magit.override {
+        inherit (self.melpaPackages) magit-popup;
+      };
 
       # missing OCaml
       merlin = markBroken super.merlin;
@@ -134,6 +155,9 @@ self:
 
       # missing OCaml
       ocp-indent = markBroken super.ocp-indent;
+
+      # upstream issue: missing dependency
+      org-readme = markBroken super.org-readme;
 
       # upstream issue: missing file header
       perl-completion = markBroken super.perl-completion;
@@ -156,6 +180,9 @@ self:
       # upstream issue: missing file footer
       seoul256-theme = markBroken super.seoul256-theme;
 
+      # upstream issue: missing dependency highlight
+      sonic-pi  = markBroken super.sonic-pi;
+
       spaceline = super.spaceline.override {
         inherit (self.melpaPackages) powerline;
       };
@@ -167,6 +194,9 @@ self:
       stgit = markBroken super.stgit;
 
       # upstream issue: missing file header
+      tawny-mode = markBroken super.tawny-mode;
+
+      # upstream issue: missing file header
       textmate = markBroken super.textmate;
 
       # missing OCaml
@@ -175,11 +205,25 @@ self:
       # upstream issue: missing file header
       voca-builder = markBroken super.voca-builder;
 
+      # upstream issue: missing dependency
+      weechat-alert = markBroken super.weechat-alert;
+
       # upstream issue: missing file header
       window-numbering = markBroken super.window-numbering;
 
       # upstream issue: missing file header
       zeitgeist = markBroken super.zeitgeist;
+
+      w3m = super.w3m.override (args: {
+        melpaBuild = drv: args.melpaBuild (drv // {
+          prePatch =
+            let w3m = "${lib.getBin external.w3m}/bin/w3m"; in ''
+              substituteInPlace w3m.el \
+                --replace 'defcustom w3m-command nil' \
+                          'defcustom w3m-command "${w3m}"'
+            '';
+        });
+      });
     };
 
     melpaPackages = super // overrides;

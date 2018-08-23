@@ -1,28 +1,69 @@
-{ stdenv, fetchurl, automoc4, cmake, gettext, perl, pkgconfig
-, kdelibs, konsole }:
+{ mkDerivation
+, lib
+, fetchurl
+, kdoctools
+, wrapGAppsHook
+, extra-cmake-modules
+, karchive
+, kcrash
+, kdbusaddons
+, ki18n
+, kiconthemes
+, knewstuff
+, knotifications
+, knotifyconfig
+, konsole
+, kparts
+, kwindowsystem
+, qtx11extras
+}:
 
-let
+mkDerivation rec {
   pname = "yakuake";
-  version = "2.9.9";
-in
-stdenv.mkDerivation {
+  version = "3.0.4";
   name = "${pname}-${version}";
 
-  src = fetchurl {
-    url = "mirror://kde/stable/${pname}/${version}/src/${pname}-${version}.tar.xz";
-    sha256 = "0e0e4994c568f8091c9424e4aab35645436a9ff341c00b1cd1eab0ada0bf61ce";
-  };
+    src = fetchurl {
+      url = "http://download.kde.org/stable/${pname}/${version}/src/${name}.tar.xz";
+      sha256 = "1q31p1cqhz8b2bikqjrr7fww86kaq723ib4ys2zwablfa1ybbqhh";
+    };
 
-  buildInputs = [ kdelibs ];
+    buildInputs = [
+      karchive
+      kcrash
+      kdbusaddons
+      ki18n
+      kiconthemes
+      knewstuff
+      knotifications
+      knotifyconfig
+      kparts
+      kwindowsystem
+      qtx11extras
+    ];
 
-  nativeBuildInputs = [ automoc4 cmake gettext perl pkgconfig ];
+  propagatedBuildInputs = [
+    karchive
+    kcrash
+    kdbusaddons
+    ki18n
+    kiconthemes
+    knewstuff
+    knotifications
+    knotifyconfig
+    kparts
+    kwindowsystem
+  ];
 
   propagatedUserEnvPkgs = [ konsole ];
 
+  nativeBuildInputs = [
+    extra-cmake-modules kdoctools wrapGAppsHook
+  ];
+
   meta = {
-    homepage = http://yakuake.kde.org;
+    homepage = https://yakuake.kde.org;
     description = "Quad-style terminal emulator for KDE";
-    inherit (kdelibs.meta) platforms;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    maintainers = with lib.maintainers; [ fridh ];
   };
 }

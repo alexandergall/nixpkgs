@@ -38,6 +38,15 @@ in
     environment.systemPackages =
       [ pkgs.lxd ];
 
+    security.apparmor = {
+      enable = true;
+      profiles = [
+        "${pkgs.lxc}/etc/apparmor.d/usr.bin.lxc-start"
+        "${pkgs.lxc}/etc/apparmor.d/lxc-containers"
+      ];
+      packages = [ pkgs.lxc ];
+    };
+
     systemd.services.lxd =
       { description = "LXD Container Management Daemon";
 
@@ -45,9 +54,13 @@ in
         after = [ "systemd-udev-settle.service" ];
 
         # TODO(wkennington): Add lvm2 and thin-provisioning-tools
-        path = with pkgs; [ acl rsync gnutar xz btrfs-progs ];
+        path = with pkgs; [ acl rsync gnutar xz btrfs-progs gzip dnsmasq squashfsTools iproute iptables ];
 
-        serviceConfig.ExecStart = "@${pkgs.lxd}/bin/lxd lxd --syslog --group lxd";
+        preStart = ''
+          mkdir -m 0755 -p /var/lib/lxc/rootfs
+        '';
+
+        serviceConfig.ExecStart = "@${pkgs.lxd.bin}/bin/lxd lxd --syslog --group lxd";
         serviceConfig.Type = "simple";
         serviceConfig.KillMode = "process"; # when stopping, leave the containers alone
       };

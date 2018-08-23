@@ -12,9 +12,10 @@ stdenv.mkDerivation rec {
     sha256 = "07c8r3xwx5is298zk77m3r784gmr5y4mh8bbca5zdjqk5vxdwsw7";
   };
 
-  outputs = [ "dev" "out" "docdev" ];
+  outputs = [ "out" "dev" "devdoc" ];
 
-  buildInputs = [ pkgconfig glib intltool ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ glib intltool ];
 
   meta = {
     homepage = http://www.xfce.org/;

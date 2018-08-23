@@ -44,9 +44,10 @@ in
       description = ''
         RSA SSH private key file in the Dropbear format.
 
-        WARNING: This key is contained insecurely in the global Nix store. Do NOT
-        use your regular SSH host private keys for this purpose or you'll expose
-        them to regular users!
+        WARNING: Unless your bootloader supports initrd secrets, this key is
+        contained insecurely in the global Nix store. Do NOT use your regular
+        SSH host private keys for this purpose or you'll expose them to
+        regular users!
       '';
     };
 
@@ -56,9 +57,10 @@ in
       description = ''
         DSS SSH private key file in the Dropbear format.
 
-        WARNING: This key is contained insecurely in the global Nix store. Do NOT
-        use your regular SSH host private keys for this purpose or you'll expose
-        them to regular users!
+        WARNING: Unless your bootloader supports initrd secrets, this key is
+        contained insecurely in the global Nix store. Do NOT use your regular
+        SSH host private keys for this purpose or you'll expose them to
+        regular users!
       '';
     };
 
@@ -68,9 +70,10 @@ in
       description = ''
         ECDSA SSH private key file in the Dropbear format.
 
-        WARNING: This key is contained insecurely in the global Nix store. Do NOT
-        use your regular SSH host private keys for this purpose or you'll expose
-        them to regular users!
+        WARNING: Unless your bootloader supports initrd secrets, this key is
+        contained insecurely in the global Nix store. Do NOT use your regular
+        SSH host private keys for this purpose or you'll expose them to
+        regular users!
       '';
     };
 
@@ -85,10 +88,15 @@ in
   };
 
   config = mkIf (config.boot.initrd.network.enable && cfg.enable) {
+    assertions = [
+      { assertion = cfg.authorizedKeys != [];
+        message = "You should specify at least one authorized key for initrd SSH";
+      }
+    ];
 
     boot.initrd.extraUtilsCommands = ''
       copy_bin_and_libs ${pkgs.dropbear}/bin/dropbear
-      cp -pv ${pkgs.glibc}/lib/libnss_files.so.* $out/lib
+      cp -pv ${pkgs.glibc.out}/lib/libnss_files.so.* $out/lib
     '';
 
     boot.initrd.extraUtilsCommandsTest = ''
@@ -96,9 +104,6 @@ in
     '';
 
     boot.initrd.network.postCommands = ''
-      mkdir /dev/pts
-      mount -t devpts devpts /dev/pts
-
       echo '${cfg.shell}' > /etc/shells
       echo 'root:x:0:0:root:/root:${cfg.shell}' > /etc/passwd
       echo 'passwd: files' > /etc/nsswitch.conf
@@ -107,17 +112,19 @@ in
       touch /var/log/lastlog
 
       mkdir -p /etc/dropbear
-      ${optionalString (cfg.hostRSAKey != null) "ln -s ${cfg.hostRSAKey} /etc/dropbear/dropbear_rsa_host_key"}
-      ${optionalString (cfg.hostDSSKey != null) "ln -s ${cfg.hostDSSKey} /etc/dropbear/dropbear_dss_host_key"}
-      ${optionalString (cfg.hostECDSAKey != null) "ln -s ${cfg.hostECDSAKey} /etc/dropbear/dropbear_ecdsa_host_key"}
 
       mkdir -p /root/.ssh
       ${concatStrings (map (key: ''
-        echo -n ${escapeShellArg key} >> /root/.ssh/authorized_keys
+        echo ${escapeShellArg key} >> /root/.ssh/authorized_keys
       '') cfg.authorizedKeys)}
 
-      dropbear -s -j -k -E -m -p ${toString cfg.port}
+      dropbear -s -j -k -E -p ${toString cfg.port} ${optionalString (cfg.hostRSAKey == null && cfg.hostDSSKey == null && cfg.hostECDSAKey == null) "-R"}
     '';
+
+    boot.initrd.secrets =
+     (optionalAttrs (cfg.hostRSAKey != null) { "/etc/dropbear/dropbear_rsa_host_key" = cfg.hostRSAKey; }) //
+     (optionalAttrs (cfg.hostDSSKey != null) { "/etc/dropbear/dropbear_dss_host_key" = cfg.hostDSSKey; }) //
+     (optionalAttrs (cfg.hostECDSAKey != null) { "/etc/dropbear/dropbear_ecdsa_host_key" = cfg.hostECDSAKey; });
 
   };
 

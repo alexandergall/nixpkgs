@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
     sha256 = "0psh3zl9dj4n4r3lx25390nx34xz0bg0ql48zdskhq354ljni5p6";
   };
 
-  outputs = [ "dev" "out" "bin" ];
+  outputs = [ "bin" "dev" "out" ];
 
   buildInputs = [ libjpeg libtiff librsvg ] ++ libintlOrEmpty;
 
@@ -18,7 +18,7 @@ stdenv.mkDerivation rec {
     description = "A library and viewer for the DJVU file format for scanned images";
     homepage = http://djvu.sourceforge.net;
     license = licenses.gpl2;
-    maintainers = with maintainers; [ urkud ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.all;
   };
 }

@@ -23,9 +23,9 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with stdenv.lib; {
-    homepage = http://sourceforge.net/projects/mjpg-streamer/;
+    homepage = https://sourceforge.net/projects/mjpg-streamer/;
     description = "MJPG-streamer takes JPGs from Linux-UVC compatible webcams, filesystem or other input plugins and streams them as M-JPEG via HTTP to webbrowsers, VLC and other software";
     platforms = platforms.linux;
-    licenses = licenses.gpl2;
+    license = licenses.gpl2;
   };
 }

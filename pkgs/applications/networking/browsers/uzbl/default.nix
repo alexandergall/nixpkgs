@@ -1,6 +1,8 @@
-{ stdenv, fetchurl, pkgconfig, python3, makeWrapper, pygtk
-, webkit, glib_networking, gsettings_desktop_schemas, pythonPackages
+{ stdenv, fetchurl, pkgconfig, python3, makeWrapper
+, webkit, glib-networking, gsettings-desktop-schemas, python2Packages
 }:
+# This package needs python3 during buildtime,
+# but Python 2 + packages during runtime.
 
 stdenv.mkDerivation rec {
   name = "uzbl-v0.9.0";
@@ -22,14 +24,14 @@ stdenv.mkDerivation rec {
   preConfigure = ''
     makeFlags="$makeFlags PREFIX=$out"
     makeFlags="$makeFlags PYINSTALL_EXTRA=--prefix=$out"
-    mkdir -p $out/lib/python3.4/site-packages/
-    export PYTHONPATH=$PYTHONPATH:$out/lib/python3.4/site-packages/
+    mkdir -p $out/${python3.sitePackages}/
+    export PYTHONPATH=$PYTHONPATH:$out/${python3.sitePackages}
   '';
 
   preFixup = ''
     for f in $out/bin/*; do
       wrapProgram $f \
-        --prefix GIO_EXTRA_MODULES : "${glib_networking.out}/lib/gio/modules" \
+        --prefix GIO_EXTRA_MODULES : "${glib-networking.out}/lib/gio/modules" \
         --prefix PYTHONPATH : "$PYTHONPATH" \
         --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH:$out/share"
     done
@@ -37,5 +39,6 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ pkgconfig python3 makeWrapper ];
 
-  buildInputs = [ gsettings_desktop_schemas webkit pygtk pythonPackages.six ];
+  buildInputs = [ gsettings-desktop-schemas webkit ];
+  propagatedBuildInputs = with python2Packages; [ pygtk six ];
 }

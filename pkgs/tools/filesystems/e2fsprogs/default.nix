@@ -1,30 +1,28 @@
-{ stdenv, fetchurl, pkgconfig, libuuid }:
+{ stdenv, buildPackages, fetchurl, pkgconfig, libuuid, gettext, texinfo }:
 
 stdenv.mkDerivation rec {
-  name = "e2fsprogs-1.42.13";
+  name = "e2fsprogs-1.43.8";
 
   src = fetchurl {
     url = "mirror://sourceforge/e2fsprogs/${name}.tar.gz";
-    sha256 = "1m72lk90b5i3h9qnmss6aygrzyn8x2avy3hyaq2fb0jglkrkz6ar";
+    sha256 = "1pn33rap3lcjm3gx07pmgyhx4j634gja63phmi4g5dq8yj0z8ciz";
   };
 
-  outputs = [ "bin" "out" "man" ];
-  outputDev = "bin"; # just for *.pc
+  outputs = [ "bin" "dev" "out" "man" "info" ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libuuid ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ pkgconfig texinfo ];
+  buildInputs = [ libuuid ] ++ stdenv.lib.optional (!stdenv.isLinux) gettext;
 
-  crossAttrs = {
-    preConfigure = ''
-      export CC=$crossConfig-gcc
-    '';
-  };
-
-  configureFlags = [
-    "--enable-elf-shlibs" "--enable-symlink-install" "--enable-relative-symlinks"
-    # libuuid, libblkid, uuidd and fsck are in util-linux-ng (the "libuuid" dependency).
-    "--disable-libuuid" "--disable-uuidd" "--disable-libblkid" "--disable-fsck"
-  ];
+  configureFlags =
+    if stdenv.isLinux then [
+      "--enable-elf-shlibs" "--enable-symlink-install" "--enable-relative-symlinks"
+      # libuuid, libblkid, uuidd and fsck are in util-linux-ng (the "libuuid" dependency).
+      "--disable-libuuid" "--disable-uuidd" "--disable-libblkid" "--disable-fsck"
+    ] else [
+      "--enable-libuuid --disable-e2initrd-helper"
+    ]
+  ;
 
   # hacky way to make it install *.pc
   postInstall = ''
@@ -34,10 +32,11 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = http://e2fsprogs.sourceforge.net/;
     description = "Tools for creating and checking ext2/ext3/ext4 filesystems";
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.eelco ];
   };
 }

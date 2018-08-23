@@ -1,18 +1,23 @@
-{ stdenv, fetchurl, unzip, nasm }:
+{ stdenv, fetchFromGitHub, nasm }:
 
 let arch =
   if stdenv.isi686 then "i386"
   else if stdenv.isx86_64 then "x86_64"
-  else abort "Unknown architecture";
-in stdenv.mkDerivation {
-  name = "grub4dos-0.4.6a-2015-12-31";
+  else throw "Unknown architecture";
+in stdenv.mkDerivation rec {
+  name = "grub4dos-${version}";
+  version = "0.4.6a-2018-02-20";
 
-  src = fetchurl {
-    url = https://github.com/chenall/grub4dos/archive/a8024743c61cc4909514b27df07b7cc4bc89d1fb.zip;
-    sha256 = "1m5d7klb12qz5sa09919z7jchfafgh84cmpwilp52qnbpi3zh2fd";
+  src = fetchFromGitHub {
+    owner = "chenall";
+    repo = "grub4dos";
+    rev = "74f6c862c73a4d21e61832174f4ab2f1d7f8b12a";
+    sha256 = "0p85y5adnlcs4cdi9dg6f5fzzc1y12bmfhx13qs0576izx2rma3q";
   };
 
-  nativeBuildInputs = [ unzip nasm ];
+  nativeBuildInputs = [ nasm ];
+
+  hardeningDisable = [ "stackprotector" ];
 
   configureFlags = [ "--host=${arch}-pc-linux-gnu" ];
 
@@ -29,7 +34,7 @@ in stdenv.mkDerivation {
     homepage = http://grub4dos.chenall.net/;
     description = "GRUB for DOS is the dos extension of GRUB";
     maintainers = with maintainers; [ abbradar ];
-    platforms = platforms.all;
+    platforms = platforms.linux;
     license = licenses.gpl2;
   };
 }

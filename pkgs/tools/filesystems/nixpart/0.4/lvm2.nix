@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, pkgconfig, libudev, systemd, utillinux, coreutils }:
+{ stdenv, fetchurl, pkgconfig, systemd, utillinux, coreutils }:
 
 let
   v = "2.02.106";
@@ -15,7 +15,8 @@ stdenv.mkDerivation {
   configureFlags =
     "--disable-readline --enable-udev_rules --enable-udev_sync --enable-pkgconfig --enable-applib";
 
-  buildInputs = [ pkgconfig libudev ];
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ systemd ];
 
   preConfigure =
     ''
@@ -23,7 +24,7 @@ stdenv.mkDerivation {
         --replace /usr/bin/tr ${coreutils}/bin/tr
       substituteInPlace scripts/lvm2_activation_generator_systemd_red_hat.c \
         --replace /usr/sbin/lvm $out/sbin/lvm \
-        --replace /usr/bin/udevadm ${systemd.udev.bin}/bin/udevadm
+        --replace /usr/bin/udevadm ${systemd}/bin/udevadm
 
       sed -i /DEFAULT_SYS_DIR/d Makefile.in
       sed -i /DEFAULT_PROFILE_DIR/d conf/Makefile.in
@@ -52,7 +53,7 @@ stdenv.mkDerivation {
 
   meta = {
     homepage = http://sourceware.org/lvm2/;
-    descriptions = "Tools to support Logical Volume Management (LVM) on Linux";
+    description = "Tools to support Logical Volume Management (LVM) on Linux";
     platforms = stdenv.lib.platforms.linux;
   };
 }

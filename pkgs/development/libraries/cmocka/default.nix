@@ -2,14 +2,15 @@
 
 stdenv.mkDerivation rec {
   name = "cmocka-${version}";
-  version = "1.0.1";
+  majorVersion = "1.1";
+  version = "${majorVersion}.1";
 
   src = fetchurl {
-    url = "https://cmocka.org/files/1.0/cmocka-${version}.tar.xz";
-    sha256 = "0fvm6rdalqcxckbddch8ycdw6n2ckldblv117n09chi2l7bm0q5k";
+    url = "https://cmocka.org/files/${majorVersion}/cmocka-${version}.tar.xz";
+    sha256 = "f02ef48a7039aa77191d525c5b1aee3f13286b77a13615d11bc1148753fc0389";
   };
 
-  buildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ];
 
   meta = with stdenv.lib; {
     description = "Lightweight library to simplify and generalize unit tests for C";
@@ -43,6 +44,6 @@ stdenv.mkDerivation rec {
 
     license = licenses.asl20;
     platforms = platforms.all;
-    maintainers = with maintainers; [ kragniz ];
+    maintainers = with maintainers; [ kragniz rasendubi ];
   };
 }

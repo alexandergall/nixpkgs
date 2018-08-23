@@ -23,11 +23,14 @@ stdenv.mkDerivation rec {
   postPatch = ''
     patchShebangs ./
     sed -i 's/dvdisaster48.png/dvdisaster/' contrib/dvdisaster.desktop
+    substituteInPlace scripts/bash-based-configure \
+      --replace 'if (make -v | grep "GNU Make") > /dev/null 2>&1 ;' \
+                'if make -v | grep "GNU Make" > /dev/null 2>&1 ;'
   '';
 
   configureFlags = [
     # Explicit --docdir= is required for on-line help to work:
-    "--docdir=$out/share/doc"
+    "--docdir=share/doc"
     "--with-nls=yes"
     "--with-embedded-src-path=no"
   ] ++ stdenv.lib.optional (builtins.elem stdenv.system
@@ -81,6 +84,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ jgeerds nckx ];
+    maintainers = with maintainers; [ jgeerds ];
   };
 }

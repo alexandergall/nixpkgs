@@ -18,8 +18,8 @@
 # Normal gem packages can be used outside of bundler; a binstub is created in
 # $out/bin.
 
-{ lib, ruby, bundler, fetchurl, fetchgit, makeWrapper, git,
-  buildRubyGem, darwin
+{ lib, fetchurl, fetchgit, makeWrapper, git, darwin
+, ruby, bundler
 } @ defs:
 
 lib.makeOverridable (
@@ -36,35 +36,36 @@ lib.makeOverridable (
     rubyName = builtins.parseDrvName ruby.name;
   in "${rubyName.name}${rubyName.version}-")
 , buildInputs ? []
-, doCheck ? false
 , meta ? {}
 , patches ? []
 , gemPath ? []
 , dontStrip ? true
-, remotes ? ["https://rubygems.org"]
 # Assume we don't have to build unless strictly necessary (e.g. the source is a
 # git checkout).
 # If you need to apply patches, make sure to set `dontBuild = false`;
 , dontBuild ? true
 , propagatedBuildInputs ? []
 , propagatedUserEnvPkgs ? []
-, buildFlags ? null
+, buildFlags ? []
 , passthru ? {}
 , ...} @ attrs:
 
 let
-  shellEscape = x: "'${lib.replaceChars ["'"] [("'\\'" + "'")] x}'";
   src = attrs.src or (
     if type == "gem" then
       fetchurl {
-        urls = map (remote: "${remote}/gems/${gemName}-${version}.gem") remotes;
-        inherit (attrs) sha256;
+        urls = map (
+          remote: "${remote}/gems/${gemName}-${version}.gem"
+        ) (attrs.source.remotes or [ "https://rubygems.org" ]);
+        inherit (attrs.source) sha256;
       }
     else if type == "git" then
       fetchgit {
-        inherit (attrs) url rev sha256 fetchSubmodules;
+        inherit (attrs.source) url rev sha256 fetchSubmodules;
         leaveDotGit = true;
       }
+    else if type == "url" then
+      fetchurl attrs.source
     else
       throw "buildRubyGem: don't know how to build a gem of type \"${type}\""
   );
@@ -75,24 +76,23 @@ let
 
 in
 
-stdenv.mkDerivation (attrs // {
+stdenv.mkDerivation ((builtins.removeAttrs attrs ["source"]) // {
   inherit ruby;
-  inherit doCheck;
   inherit dontBuild;
   inherit dontStrip;
   inherit type;
 
   buildInputs = [
     ruby makeWrapper
-  ] ++ lib.optionals (type == "git") [ git bundler ]
+  ] ++ lib.optionals (type == "git") [ git ]
+    ++ lib.optionals (type != "gem") [ bundler ]
     ++ lib.optional stdenv.isDarwin darwin.libobjc
     ++ buildInputs;
 
+  #name = builtins.trace (attrs.name or "no attr.name" ) "${namePrefix}${gemName}-${version}";
   name = attrs.name or "${namePrefix}${gemName}-${version}";
 
   inherit src;
-
-  phases = attrs.phases or [ "unpackPhase" "patchPhase" "buildPhase" "installPhase" "fixupPhase" ];
 
   unpackPhase = attrs.unpackPhase or ''
     runHook preUnpack
@@ -158,14 +158,22 @@ stdenv.mkDerivation (attrs // {
 
     echo "buildFlags: $buildFlags"
 
+    ${lib.optionalString (type ==  "url") ''
+    ruby ${./nix-bundle-install.rb} \
+      "path" \
+      '${gemName}' \
+      '${version}' \
+      '${lib.escapeShellArgs buildFlags}'
+    ''}
     ${lib.optionalString (type == "git") ''
     ruby ${./nix-bundle-install.rb} \
-      ${gemName} \
-      ${attrs.url} \
-      ${src} \
-      ${attrs.rev} \
-      ${version} \
-      ${shellEscape (toString buildFlags)}
+      "git" \
+      '${gemName}' \
+      '${version}' \
+      '${lib.escapeShellArgs buildFlags}' \
+      '${attrs.source.url}' \
+      '${src}' \
+      '${attrs.source.rev}'
     ''}
 
     ${lib.optionalString (type == "gem") ''
@@ -182,8 +190,10 @@ stdenv.mkDerivation (attrs // {
       --force \
       --http-proxy 'http://nodtd.invalid' \
       --ignore-dependencies \
+      --install-dir "$GEM_HOME" \
       --build-root '/' \
       --backtrace \
+      --no-env-shebang \
       ${documentFlag} \
       $gempkg $gemFlags -- $buildFlags
 

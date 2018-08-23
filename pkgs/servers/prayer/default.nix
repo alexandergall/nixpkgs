@@ -18,6 +18,7 @@ stdenv.mkDerivation rec {
       ${ssl} \
       -e 's/CCLIENT_LIBS=.*/CCLIENT_LIBS=-lc-client/' \
       -e 's,^PREFIX .*,PREFIX='$out, \
+      -e 's,^CCLIENT_DIR=.*,CCLIENT_DIR=${uwimap}/include/c-client,' \
       Config
     sed -i -e s,/usr/bin/perl,${perl}/bin/perl, \
       templates/src/*.pl
@@ -35,5 +36,6 @@ stdenv.mkDerivation rec {
     homepage = http://www-uxsup.csx.cam.ac.uk/~dpc22/prayer/;
     description = "Yet another Webmail interface for IMAP servers on Unix systems written in C";
     license = stdenv.lib.licenses.gpl2Plus;
+    platforms = stdenv.lib.platforms.linux;
   };
 }

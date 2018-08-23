@@ -1,5 +1,5 @@
 { stdenv, fetchurl, glib, flex, bison, pkgconfig, libffi, python
-, libintlOrEmpty, cctools
+, libintlOrEmpty, cctools, cairo, gnome3
 , substituteAll, nixStoreDir ? builtins.storeDir
 }:
 # now that gobjectIntrospection creates large .gir files (eg gtk3 case)
@@ -7,23 +7,24 @@
 # In that case its about 6MB which could be separated
 
 let
-  ver_maj = "1.46";
-  ver_min = "0";
+  pname = "gobject-introspection";
+  version = "1.54.1";
 in
 with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "gobject-introspection-${ver_maj}.${ver_min}";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/gobject-introspection/${ver_maj}/${name}.tar.xz";
-    sha256 = "6658bd3c2b8813eb3e2511ee153238d09ace9d309e4574af27443d87423e4233";
+    url = "mirror://gnome/sources/${pname}/${gnome3.versionBranch version}/${name}.tar.xz";
+    sha256 = "0zl7pfkzkm07733391b4f3cwjbnvb1nwvpmajf5bajh6bxgfv3dq";
   };
 
-  outputs = [ "dev" "out" ];
+  outputs = [ "out" "dev" ];
   outputBin = "dev";
   outputMan = "dev"; # tiny pages
 
-  buildInputs = [ flex bison pkgconfig python setupHook/*move .gir*/ ]
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ flex bison python setupHook/*move .gir*/ ]
     ++ libintlOrEmpty
     ++ stdenv.lib.optional stdenv.isDarwin cctools;
   propagatedBuildInputs = [ libffi glib ];
@@ -37,18 +38,29 @@ stdenv.mkDerivation rec {
 
   setupHook = ./setup-hook.sh;
 
-  patches = stdenv.lib.singleton (substituteAll {
-    src = ./absolute_shlib_path.patch;
-    inherit nixStoreDir;
-  }) ++ optional stdenv.isDarwin (substituteAll {
-    src = ./darwin-fixups.patch;
-    inherit nixStoreDir;
-  });
+  patches = [
+    (substituteAll {
+      src = ./absolute_shlib_path.patch;
+      inherit nixStoreDir;
+    })
+    # https://github.com/NixOS/nixpkgs/issues/34080
+    (substituteAll {
+      src = ./absolute_gir_path.patch;
+      cairoLib = "${getLib cairo}/lib";
+    })
+  ];
+
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+      attrPath = "gobjectIntrospection";
+    };
+  };
 
   meta = with stdenv.lib; {
     description = "A middleware layer between C libraries and language bindings";
     homepage    = http://live.gnome.org/GObjectIntrospection;
-    maintainers = with maintainers; [ lovek323 urkud lethalman ];
+    maintainers = with maintainers; [ lovek323 lethalman ];
     platforms   = platforms.unix;
 
     longDescription = ''

@@ -1,10 +1,10 @@
-{ stdenv, fetchurl, python, libxslt, texlive
+{ stdenv, fetchurl, python2, libxslt, texlive
 , enableAllFeatures ? false, imagemagick ? null, transfig ? null, inkscape ? null, fontconfig ? null, ghostscript ? null
 
 , tex ? texlive.combine { # satisfy all packages that ./configure mentions
     inherit (texlive) scheme-basic epstopdf anysize appendix changebar
       fancybox fancyvrb float footmisc listings jknapltx/*for mathrsfs.sty*/
-      multirow overpic pdfpages rotating stmaryrd subfigure titlesec wasysym
+      multirow overpic pdfpages graphics stmaryrd subfigure titlesec wasysym
       # pkgs below don't seem requested by dblatex, but our manual fails without them
       ec zapfding symbol eepic times rsfs cs tex4ht courier helvetic ly1;
   }
@@ -21,14 +21,14 @@ assert enableAllFeatures ->
   ghostscript != null;
 
 stdenv.mkDerivation rec {
-  name = "dblatex-0.3.7";
+  name = "dblatex-0.3.10";
 
   src = fetchurl {
     url = "mirror://sourceforge/dblatex/${name}.tar.bz2";
-    sha256 = "0bkjgrn03dy5c7438s429wnv6z5ynxkr4pbhp2z49kynskgkzkjr";
+    sha256 = "1yicd861rqz78i2khl35j7nvc0ccv4jx4hzqrbhll17082vrdmkg";
   };
 
-  buildInputs = [ python libxslt tex ]
+  buildInputs = [ python2 libxslt tex ]
     ++ stdenv.lib.optionals enableAllFeatures [ imagemagick transfig ];
 
   # TODO: dblatex tries to execute texindy command, but nixpkgs doesn't have
@@ -50,15 +50,15 @@ stdenv.mkDerivation rec {
             -e 's|cmd = "inkscape|cmd = "${inkscape}/bin/inkscape|g' \
             -e 's|cmd = "fig2dev|cmd = "${transfig}/bin/fig2dev|g' \
             -e 's|cmd = \["ps2pdf|cmd = ["${ghostscript}/bin/ps2pdf|g' \
-            -e 's|cmd = "convert|cmd = "${imagemagick}/bin/convert|g' \
+            -e 's|cmd = "convert|cmd = "${imagemagick.out}/bin/convert|g' \
             -i "$file"
     done
   '';
 
-  buildPhase = "true";
+  dontBuild = true;
 
   installPhase = ''
-    python ./setup.py install --prefix="$out" --use-python-path --verbose
+    ${python2.interpreter} ./setup.py install --prefix="$out" --use-python-path --verbose
   '';
 
   passthru = { inherit tex; };
@@ -67,5 +67,6 @@ stdenv.mkDerivation rec {
     description = "A program to convert DocBook to DVI, PostScript or PDF via LaTeX or ConTeXt";
     homepage = http://dblatex.sourceforge.net/;
     license = stdenv.lib.licenses.gpl2Plus;
+    platforms = stdenv.lib.platforms.unix;
   };
 }

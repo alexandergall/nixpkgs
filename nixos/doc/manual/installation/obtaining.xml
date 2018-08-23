@@ -12,11 +12,10 @@ download page</link>.  There are a number of installation options.  If
 you happen to have an optical drive and a spare CD, burning the
 image to CD and booting from that is probably the easiest option.
 Most people will need to prepare a USB stick to boot from.
-Unetbootin is recommended and the process is described in brief below.
-Note that systems which use UEFI require some additional manual steps.
-If you run into difficulty a number of alternative methods are presented
-in the <link
-xlink:href="https://nixos.org/wiki/Installing_NixOS_from_a_USB_stick">NixOS
+<xref linkend="sec-booting-from-usb"/> describes the preferred method
+to prepare a USB stick.
+A number of alternative methods are presented in the <link
+xlink:href="https://nixos.wiki/wiki/NixOS_Installation_Guide#Making_the_installation_media">NixOS
 Wiki</link>.</para>
 
 <para>As an alternative to installing NixOS yourself, you can get a
@@ -32,7 +31,7 @@ running NixOS system through several other means:
   <listitem>
     <para>Using AMIs for Amazon’s EC2.  To find one for your region
     and instance type, please refer to the <link
-    xlink:href="https://github.com/NixOS/nixops/blob/master/nix/ec2-amis.nix">list
+    xlink:href="https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/virtualisation/ec2-amis.nix">list
     of most recent AMIs</link>.</para>
   </listitem>
   <listitem>

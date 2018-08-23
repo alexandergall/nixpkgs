@@ -1,22 +1,25 @@
-{ stdenv, fetchurl, ncurses }:
+{ stdenv, fetchFromGitHub, ncurses }:
 
 stdenv.mkDerivation rec {
-  version = "1.0.5";
+  version = "1.0.12";
   name = "mdp-${version}";
 
-  src = fetchurl {
-    url = "https://github.com/visit1985/mdp/archive/${version}.tar.gz";
-    sha256 = "0ckd9k5571zc7pzxdx84gv8k103d5qp49f2i477a395fy2pnq4m8";
+  src = fetchFromGitHub {
+    owner = "visit1985";
+    repo = "mdp";
+    rev = version;
+    sha256 = "04izj9i9rxmgswjh2iawqs6qglfv44zfv042smmcvfh1pm43361i";
   };
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [ "PREFIX=$(out)" ];
 
   buildInputs = [ ncurses ];
 
   meta = with stdenv.lib; {
     homepage = https://github.com/visit1985/mdp;
     description = "A command-line based markdown presentation tool";
-    maintainers = with maintainers; [ matthiasbeyer ];
+    maintainers = with maintainers; [ matthiasbeyer vrthra ];
     license = licenses.gpl3;
+    platforms = with platforms; unix;
   };
 }

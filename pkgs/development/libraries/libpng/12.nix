@@ -1,22 +1,24 @@
-{ stdenv, fetchurl, zlib }:
+{ stdenv, fetchurl, zlib
+, buildPlatform, hostPlatform
+}:
 
-assert !(stdenv ? cross) -> zlib != null;
+assert hostPlatform == buildPlatform -> zlib != null;
 
 stdenv.mkDerivation rec {
-  name = "libpng-1.2.55";
+  name = "libpng-1.2.57";
 
   src = fetchurl {
     url = "mirror://sourceforge/libpng/${name}.tar.xz";
-    sha256 = "0zkra0b9lrpk2axassdgkqinmc2ba6b473sm52xbpyknaqs2fljy";
+    sha256 = "1n2lrzjkm5jhfg2bs10q398lkwbbx742fi27zgdgx0x23zhj0ihg";
   };
 
-  outputs = [ "dev" "out" "man" ];
+  outputs = [ "out" "dev" "man" ];
 
   propagatedBuildInputs = [ zlib ];
 
   passthru = { inherit zlib; };
 
-  crossAttrs = stdenv.lib.optionalAttrs (stdenv.cross.libc == "libSystem") {
+  crossAttrs = stdenv.lib.optionalAttrs (hostPlatform.libc == "libSystem") {
     propagatedBuildInputs = [];
     passthru = {};
   };
@@ -31,5 +33,6 @@ stdenv.mkDerivation rec {
     license = licenses.libpng;
     maintainers = [ maintainers.fuuzetsu ];
     branch = "1.2";
+    platforms = platforms.unix;
   };
 }

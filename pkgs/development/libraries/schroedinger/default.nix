@@ -11,7 +11,7 @@ stdenv.mkDerivation {
     sha256 = "04prr667l4sn4zx256v1z36a0nnkxfdqyln48rbwlamr6l3jlmqy";
   };
 
-  outputs = [ "dev" "out" "docdev" ];
+  outputs = [ "out" "dev" "devdoc" ];
 
   nativeBuildInputs = [ pkgconfig ];
   buildInputs = [ orc ];
@@ -19,7 +19,7 @@ stdenv.mkDerivation {
   doCheck = true;
 
   meta = with stdenv.lib; {
-    homepage = "http://diracvideo.org/";
+    homepage = http://diracvideo.org/;
     maintainers = [ maintainers.spwhitt ];
     license = [ licenses.mpl11 licenses.lgpl2 licenses.mit ];
     platforms = platforms.unix;

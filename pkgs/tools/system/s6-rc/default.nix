@@ -2,7 +2,7 @@
 
 let
 
-  version = "0.0.2.1";
+  version = "0.3.0.0";
 
 in stdenv.mkDerivation rec {
 
@@ -11,7 +11,7 @@ in stdenv.mkDerivation rec {
   src = fetchgit {
     url = "git://git.skarnet.org/s6-rc";
     rev = "refs/tags/v${version}";
-    sha256 = "0x9ghi1f7zqphzlzyz67z7n7mnnyxf1hghi2wa2f8cdl70nfdi2f";
+    sha256 = "174a3l92nkhxrx8gq36xmb5a7krj40iz1xdiii25nxwjfiw5ynfb";
   };
 
   dontDisableStatic = true;
@@ -19,6 +19,7 @@ in stdenv.mkDerivation rec {
   enableParallelBuilding = true;
 
   configureFlags = [
+    "--enable-absolute-paths"
     "--with-sysdeps=${skalibs}/lib/skalibs/sysdeps"
     "--with-include=${skalibs}/include"
     "--with-include=${execline}/include"
@@ -31,11 +32,11 @@ in stdenv.mkDerivation rec {
     "--with-dynlib=${s6}/lib"
   ]
   ++ (if stdenv.isDarwin then [ "--disable-shared" ] else [ "--enable-shared" ])
-  ++ (stdenv.lib.optional stdenv.isDarwin "--target=${stdenv.system}");
+  ++ (stdenv.lib.optional stdenv.isDarwin "--build=${stdenv.system}");
 
   meta = {
     homepage = http://skarnet.org/software/s6-rc/;
-    description = "a service manager for s6-based systems";
+    description = "A service manager for s6-based systems";
     platforms = stdenv.lib.platforms.all;
     license = stdenv.lib.licenses.isc;
     maintainers = with stdenv.lib.maintainers; [ pmahoney ];

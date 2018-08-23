@@ -107,7 +107,7 @@ in {
       };
 
       extraConfig = mkOption {
-        type = types.string;
+        type = types.lines;
         default = "";
         description = ''
           Extra configuration options for Bosun. You should describe your
@@ -148,7 +148,7 @@ in {
         User = cfg.user;
         Group = cfg.group;
         ExecStart = ''
-          ${cfg.package}/bin/bosun -c ${configFile}
+          ${cfg.package.bin}/bin/bosun -c ${configFile}
         '';
       };
     };

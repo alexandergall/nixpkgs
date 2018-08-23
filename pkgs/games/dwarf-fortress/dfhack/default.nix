@@ -1,18 +1,26 @@
-{ stdenv, fetchgit, cmake, writeScriptBin
-, perl, XMLLibXML, XMLLibXSLT
-, zlib
-, jsoncpp, protobuf, tinyxml
+{ stdenv, lib, fetchgit, cmake, writeScriptBin, callPackage
+, perl, XMLLibXML, XMLLibXSLT, zlib
+, enableStoneSense ? false,  allegro5, libGLU_combined
 }:
 
 let
-  rev = "5e2fc5662115499c10bfcd8a6105a1efe4de081c";
-  xmlRev = "f371e293002f8f6d1e4704cc5869ca07ccf6c4d5";
-  dfVersion = "0.42.06";
+  dfVersion = "0.44.05";
+  version = "${dfVersion}-r2";
+  rev = "refs/tags/${version}";
+  sha256 = "1hr3qsx7rd36syw7dfp4lh8kpmz1pvva757za2yn34hj1jm4nh52";
+
+  # revision of library/xml submodule
+  xmlRev = "2794f8a6d7405d4858bac486a0bb17b94740c142";
+
+  arch =
+    if stdenv.system == "x86_64-linux" then "64"
+    else if stdenv.system == "i686-linux" then "32"
+    else throw "Unsupported architecture";
 
   fakegit = writeScriptBin "git" ''
     #! ${stdenv.shell}
     if [ "$*" = "describe --tags --long" ]; then
-      echo "${dfVersion}-unknown"
+      echo "${version}-unknown"
     elif [ "$*" = "rev-parse HEAD" ]; then
       if [ "$(dirname "$(pwd)")" = "xml" ]; then
         echo "${xmlRev}"
@@ -28,30 +36,42 @@ let
 
 in stdenv.mkDerivation rec {
   name = "dfhack-${version}";
-  version = "2016-03-03";
 
   # Beware of submodules
   src = fetchgit {
     url = "https://github.com/DFHack/dfhack";
-    inherit rev;
-    sha256 = "143zkx6hqpqxjhjd1bllg2kfia215x63zifkhgzycg49kw4wkxi5";
+    inherit rev sha256;
   };
 
-  patches = [ ./use-system-libraries.patch ];
+  patches = [ ./fix-stonesense.patch ];
 
   nativeBuildInputs = [ cmake perl XMLLibXML XMLLibXSLT fakegit ];
-  # we can't use native Lua; upstream uses private headers
-  buildInputs = [ zlib jsoncpp protobuf tinyxml ];
+  # We don't use system libraries because dfhack needs old C++ ABI.
+  buildInputs = [ zlib ]
+             ++ lib.optionals enableStoneSense [ allegro5 libGLU_combined ];
+
+  preConfigure = ''
+    # Trick build system into believing we have .git
+    mkdir -p .git/modules/library/xml
+    touch .git/index .git/modules/library/xml/index
+  '';
+
+  preBuild = ''
+    export LD_LIBRARY_PATH="$PWD/depends/protobuf:$LD_LIBRARY_PATH"
+  '';
+
+  cmakeFlags = [ "-DDFHACK_BUILD_ARCH=${arch}" "-DDOWNLOAD_RUBY=OFF" ]
+            ++ lib.optionals enableStoneSense [ "-DBUILD_STONESENSE=ON" "-DSTONESENSE_INTERNAL_SO=OFF" ];
 
   enableParallelBuilding = true;
 
-  passthru = { inherit dfVersion; };
+  passthru = { inherit version dfVersion; };
 
   meta = with stdenv.lib; {
     description = "Memory hacking library for Dwarf Fortress and a set of tools that use it";
     homepage = https://github.com/DFHack/dfhack/;
     license = licenses.zlib;
-    platforms = [ "i686-linux" ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
     maintainers = with maintainers; [ robbinch a1russell abbradar ];
   };
 }

@@ -11,16 +11,20 @@ stdenv.mkDerivation rec {
     owner = "Cyan4973";
   };
 
+  outputs = [ "out" "dev" ];
+
   buildInputs = stdenv.lib.optional doCheck valgrind;
 
   enableParallelBuilding = true;
 
-  makeFlags = [ "PREFIX=$(out)" ];
+  makeFlags = [ "PREFIX=$(out)" "INCLUDEDIR=$(dev)/include" ];
 
   doCheck = false; # tests take a very long time
   checkTarget = "test";
 
   patches = [ ./install-on-freebsd.patch ] ;
+
+  postInstall = "rm $out/lib/*.a";
 
   meta = with stdenv.lib; {
     description = "Extremely fast compression algorithm";
@@ -31,9 +35,8 @@ stdenv.mkDerivation rec {
       multiple GB/s per core, typically reaching RAM speed limits on
       multi-core systems.
     '';
-    homepage = https://code.google.com/p/lz4/;
+    homepage = https://lz4.github.io/lz4/;
     license = with licenses; [ bsd2 gpl2Plus ];
     platforms = platforms.unix;
-    maintainers = with maintainers; [ nckx ];
   };
 }

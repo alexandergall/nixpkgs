@@ -1,19 +1,20 @@
-{ stdenv, fetchFromGitHub, curl, boost, jsoncpp, liboauth, rhash, tinyxml, htmlcxx, help2man }:
+{ stdenv, fetchFromGitHub, cmake, pkgconfig, curl, boost, liboauth, jsoncpp
+, htmlcxx, rhash, tinyxml-2, help2man }:
 
 stdenv.mkDerivation rec {
   name = "lgogdownloader-${version}";
-  version = "2.26";
+  version = "3.3";
 
   src = fetchFromGitHub {
     owner = "Sude-";
     repo = "lgogdownloader";
     rev = "v${version}";
-    sha256 = "0277g70nvq7bh42gnry7lz7wqhw8wl2hq6sfxwhn8x4ybkalj2gx";
+    sha256 = "056idwwxjcp2zjqk5h7l3py1h45sax4vbsm93bz9shnfx1s1h3gc";
   };
 
-  buildInputs = [ curl boost jsoncpp liboauth rhash tinyxml htmlcxx help2man ];
+  nativeBuildInputs = [ cmake pkgconfig help2man ];
 
-  makeFlags = [ "release" "PREFIX=$(out)" ];
+  buildInputs = [ curl boost liboauth jsoncpp htmlcxx rhash tinyxml-2 ];
 
   meta = {
     homepage = https://github.com/Sude-/lgogdownloader;

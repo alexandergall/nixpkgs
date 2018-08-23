@@ -8,8 +8,8 @@ stdenv.mkDerivation rec {
     sha256 = "0l5wa3b9rr4zl49zbbjpapqyccqjwzkzw1ph3p4pk9p5h73h9317";
   };
 
-  outputs = [ "dev" "out" "docdev" ];
-  outputMan= "docdev";
+  outputs = [ "out" "dev" "devdoc" ];
+  outputMan= "devdoc";
 
   propagatedBuildInputs = [ zlib libpng libjpeg lcms2 ];
 
@@ -17,7 +17,7 @@ stdenv.mkDerivation rec {
     description = "Reference library for reading, displaying, writing and examining Multiple-Image Network Graphics";
     homepage = http://www.libmng.com;
     license = licenses.zlib;
-    maintainers = with maintainers; [ marcweber urkud ];
-    hydraPlatforms = platforms.linux;
+    maintainers = with maintainers; [ marcweber ];
+    platforms = platforms.unix;
   };
 }

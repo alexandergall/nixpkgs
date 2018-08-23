@@ -1,70 +1,74 @@
-{ lib, stdenv, fetchurl, perl, curl, bzip2, sqlite, openssl ? null, xz
-, pkgconfig, boehmgc, perlPackages, libsodium
+{ lib, stdenv, fetchurl, fetchFromGitHub, perl, curl, bzip2, sqlite, openssl ? null, xz
+, pkgconfig, boehmgc, perlPackages, libsodium, aws-sdk-cpp, brotli
+, autoreconfHook, autoconf-archive, bison, flex, libxml2, libxslt, docbook5, docbook5_xsl
+, libseccomp, busybox-sandbox-shell
+, hostPlatform, buildPlatform
 , storeDir ? "/nix/store"
 , stateDir ? "/nix/var"
+, confDir ? "/etc"
 }:
 
 let
 
-  common = { name, src }: stdenv.mkDerivation rec {
+  sh = busybox-sandbox-shell;
+
+  common = { name, suffix ? "", src, fromGit ? false }: stdenv.mkDerivation rec {
     inherit name src;
+    version = lib.getVersion name;
 
-    outputs = [ "out" "man" "doc" ];
+    is20 = lib.versionAtLeast version "2.0pre";
 
-    nativeBuildInputs = [ perl pkgconfig ];
+    VERSION_SUFFIX = lib.optionalString fromGit suffix;
 
-    buildInputs = [ curl openssl sqlite xz ]
-      ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium;
+    outputs = [ "out" "dev" "man" "doc" ];
+
+    nativeBuildInputs =
+      [ pkgconfig ]
+      ++ lib.optionals (!is20) [ curl perl ]
+      ++ lib.optionals fromGit [ autoreconfHook autoconf-archive bison flex libxml2 libxslt docbook5 docbook5_xsl ];
+
+    buildInputs = [ curl openssl sqlite xz bzip2 ]
+      ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
+      ++ lib.optionals fromGit [ brotli ] # Since 1.12
+      ++ lib.optional (hostPlatform.isSeccomputable) libseccomp
+      ++ lib.optional ((stdenv.isLinux || stdenv.isDarwin) && is20)
+          (aws-sdk-cpp.override {
+            apis = ["s3"];
+            customMemoryManagement = false;
+          });
 
     propagatedBuildInputs = [ boehmgc ];
 
-    # Note: bzip2 is not passed as a build input, because the unpack phase
-    # would end up using the wrong bzip2 when cross-compiling.
-    # XXX: The right thing would be to reinstate `--with-bzip2' in Nix.
-    postUnpack =
-      '' export CPATH="${bzip2.dev}/include"
-         export LIBRARY_PATH="${bzip2.out}/lib"
-         export CXXFLAGS="-Wno-error=reserved-user-defined-literal"
-      '';
-
     configureFlags =
-      ''
-        --with-store-dir=${storeDir} --localstatedir=${stateDir} --sysconfdir=/etc
-        --with-dbi=${perlPackages.DBI}/${perl.libPrefix}
-        --with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}
-        --with-www-curl=${perlPackages.WWWCurl}/${perl.libPrefix}
-        --disable-init-state
-        --enable-gc
-      '';
+      [ "--with-store-dir=${storeDir}"
+        "--localstatedir=${stateDir}"
+        "--sysconfdir=${confDir}"
+        "--disable-init-state"
+        "--enable-gc"
+      ]
+      ++ lib.optionals (!is20) [
+        "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
+        "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
+        "--with-www-curl=${perlPackages.WWWCurl}/${perl.libPrefix}"
+      ] ++ lib.optionals (is20 && stdenv.isLinux) [
+        "--with-sandbox-shell=${sh}/bin/busybox"
+      ]
+      ++ lib.optional (
+          hostPlatform != buildPlatform && hostPlatform ? nix && hostPlatform.nix ? system
+      ) ''--with-system=${hostPlatform.nix.system}''
+         # RISC-V support in progress https://github.com/seccomp/libseccomp/pull/50
+      ++ lib.optional (!hostPlatform.isSeccomputable) "--disable-seccomp-sandboxing";
 
     makeFlags = "profiledir=$(out)/etc/profile.d";
 
     installFlags = "sysconfdir=$(out)/etc";
 
-    doInstallCheck = false;
+    doInstallCheck = true; # not cross
+
+    # socket path becomes too long otherwise
+    preInstallCheck = lib.optional stdenv.isDarwin "export TMPDIR=/tmp";
 
     separateDebugInfo = stdenv.isLinux;
-
-    crossAttrs = {
-      postUnpack =
-        '' export CPATH="${bzip2.crossDrv}/include"
-           export NIX_CROSS_LDFLAGS="-L${bzip2.crossDrv}/lib -rpath-link ${bzip2.crossDrv}/lib $NIX_CROSS_LDFLAGS"
-        '';
-
-      configureFlags =
-        ''
-          --with-store-dir=${storeDir} --localstatedir=${stateDir}
-          --with-dbi=${perlPackages.DBI}/${perl.libPrefix}
-          --with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}
-          --with-www-curl=${perlPackages.WWWCurl}/${perl.libPrefix}
-          --disable-init-state
-          --enable-gc
-        '' + stdenv.lib.optionalString (
-            stdenv.cross ? nix && stdenv.cross.nix ? system
-        ) ''--with-system=${stdenv.cross.nix.system}'';
-
-      doInstallCheck = false;
-    };
 
     enableParallelBuilding = true;
 
@@ -77,31 +81,67 @@ let
         a package, multi-user package management and easy setup of build
         environments.
       '';
-      homepage = http://nixos.org/;
+      homepage = https://nixos.org/;
       license = stdenv.lib.licenses.lgpl2Plus;
       maintainers = [ stdenv.lib.maintainers.eelco ];
       platforms = stdenv.lib.platforms.all;
+      outputsToInstall = [ "out" "man" ];
     };
+
+    passthru = { inherit fromGit; };
+  };
+
+  perl-bindings = { nix }: stdenv.mkDerivation {
+    name = "nix-perl-" + nix.version;
+
+    inherit (nix) src;
+
+    postUnpack = "sourceRoot=$sourceRoot/perl";
+
+    nativeBuildInputs =
+      [ perl pkgconfig curl nix libsodium ]
+      ++ lib.optionals nix.fromGit [ autoreconfHook autoconf-archive ];
+
+    configureFlags =
+      [ "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
+        "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
+      ];
+
+    preConfigure = "export NIX_STATE_DIR=$TMPDIR";
+
+    preBuild = "unset NIX_INDENT_MAKE";
   };
 
 in rec {
 
   nix = nixStable;
 
-  nixStable = common rec {
-    name = "nix-1.11.2";
+  nix1 = (common rec {
+    name = "nix-1.11.16";
     src = fetchurl {
       url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "fc1233814ebb385a2a991c1fb88c97b344267281e173fea7d9acd3f9caf969d6";
+      sha256 = "0ca5782fc37d62238d13a620a7b4bff6a200bab1bd63003709249a776162357c";
     };
-  };
+  }) // { perl-bindings = nixStable; };
 
-  nixUnstable = lib.lowPrio (common rec {
-    name = "nix-1.12pre4523_3b81b26";
+  nixStable = (common rec {
+    name = "nix-2.0";
     src = fetchurl {
-      url = "http://hydra.nixos.org/build/33598573/download/4/${name}.tar.xz";
-      sha256 = "0469zv09m85824w4vqj2ag0nciq51xvrvsys7bd5v4nrxihk9991";
+      url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
+      sha256 = "7024d327314bf92c1d3e6cccd944929828a44b24093954036bfb0115a92f5a14";
     };
-  });
+  }) // { perl-bindings = perl-bindings { nix = nixStable; }; };
+
+  nixUnstable = (lib.lowPrio (common rec {
+    name = "nix-2.0${suffix}";
+    suffix = "pre5968_a6c0b773";
+    src = fetchFromGitHub {
+      owner = "NixOS";
+      repo = "nix";
+      rev = "a6c0b773b72d4e30690e01f1f1dcffc28f2d9ea1";
+      sha256 = "0i8wcblcjw3291ba6ki4llw3fgm8ylp9q52kajkyr58dih537346";
+    };
+    fromGit = true;
+  })) // { perl-bindings = perl-bindings { nix = nixUnstable; }; };
 
 }

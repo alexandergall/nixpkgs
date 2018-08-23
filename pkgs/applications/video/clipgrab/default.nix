@@ -1,16 +1,17 @@
-{ stdenv, fetchurl, makeDesktopItem, ffmpeg, qt4 }:
+{ stdenv, fetchurl, makeDesktopItem, ffmpeg, qt4, qmake4Hook }:
 
 stdenv.mkDerivation rec {
   name = "clipgrab-${version}";
-  version = "3.5.6";
+  version = "3.6.2";
 
   src = fetchurl {
-    sha256 = "0wm6hqaq6ydbvvd0fqkfydxd5h7gf4di7lvq63xgxl4z40jqc25n";
+    sha256 = "0n7bhwkzknjpp54h54hxv1s8nsmmb7cwwf1aqpbcsnd7y6cv28nm";
     # The .tar.bz2 "Download" link is a binary blob, the source is the .tar.gz!
-    url = "http://download.clipgrab.de/${name}.tar.gz";
+    url = "https://download.clipgrab.org/${name}.tar.gz";
   };
 
   buildInputs = [ ffmpeg qt4 ];
+  nativeBuildInputs = [ qmake4Hook ];
 
   postPatch = stdenv.lib.optionalString (ffmpeg != null) ''
   substituteInPlace converter_ffmpeg.cpp \
@@ -18,9 +19,7 @@ stdenv.mkDerivation rec {
     --replace '"ffmpeg ' '"${ffmpeg.bin}/bin/ffmpeg '
   '';
 
-  configurePhase = ''
-    qmake clipgrab.pro
-  '';
+  qmakeFlags = [ "clipgrab.pro" ];
 
   enableParallelBuilding = true;
 
@@ -29,7 +28,7 @@ stdenv.mkDerivation rec {
     exec = name;
     icon = name;
     desktopName = "ClipGrab";
-    comment = "A friendly downloader for YouTube and other sites";
+    comment = meta.description;
     genericName = "Web video downloader";
     categories = "Qt;AudioVideo;Audio;Video";
   };
@@ -47,9 +46,8 @@ stdenv.mkDerivation rec {
       Dailymotion and many other online video sites. It converts downloaded
       videos to MPEG4, MP3 or other formats in just one easy step.
     '';
-    homepage = http://clipgrab.org/;
+    homepage = https://clipgrab.org/;
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

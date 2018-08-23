@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name = "marathon-${version}";
-  version = "0.15.3";
+  version = "1.4.2";
 
   src = fetchurl {
-    url = "https://downloads.mesosphere.io/marathon/v${version}/marathon-${version}.tgz";
-    sha256 = "1br4k596sjp4cf5l2nyaqhlsfdr443n08fvdyf4kilhr803x2rjq";
+    url = "https://downloads.mesosphere.com/marathon/v${version}/marathon-${version}.tgz";
+    sha256 = "6eab65a95c87a989e922aca2b49ba872b50a94e46a8fd4831d1ab41f319d6932";
   };
 
   buildInputs = [ makeWrapper jdk mesos ];
@@ -24,7 +24,7 @@ stdenv.mkDerivation rec {
     homepage = https://mesosphere.github.io/marathon;
     description = "Cluster-wide init and control system for services in cgroups or Docker containers";
     license = licenses.asl20;
-    maintainers = with maintainers; [ rushmorem kamilchm kevincox ];
+    maintainers = with maintainers; [ kamilchm kevincox pradeepchhetri ];
     platforms = platforms.linux;
   };
 }

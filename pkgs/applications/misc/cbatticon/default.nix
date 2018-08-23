@@ -3,13 +3,13 @@
 stdenv.mkDerivation rec {
 
   name = "cbatticon-${version}";
-  version = "1.6.4";
+  version = "1.6.7";
 
   src = fetchFromGitHub {
     owner = "valr";
     repo = "cbatticon";
     rev = version;
-    sha256 = "0m3bj408mbini97kq0cdf048lnfkdn7bd8ikbfijd7dwfdzv27i5";
+    sha256 = "0rm1rpq81cxjwd4f11c3ivg5hwsd08qm47vdn16yr1cmm2cw4r2d";
   };
 
   makeFlags = "PREFIX=$(out)";
@@ -22,7 +22,7 @@ stdenv.mkDerivation rec {
     description = "Lightweight and fast battery icon that sits in the system tray";
     homepage = https://github.com/valr/cbatticon;
     license = licenses.gpl2;
-    maintainers = [ maintainers.iElectric ];
+    maintainers = [ maintainers.domenkozar ];
     platforms = platforms.linux;
   };
 }

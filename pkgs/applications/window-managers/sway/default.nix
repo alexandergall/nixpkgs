@@ -1,42 +1,40 @@
 { stdenv, fetchFromGitHub
-, makeWrapper, cmake, pkgconfig, asciidoc, libxslt, docbook_xsl
-, wayland, wlc, libxkbcommon, pixman, fontconfig, pcre, json_c, dbus_libs
+, cmake, pkgconfig, asciidoc, libxslt, docbook_xsl
+, wayland, wlc, libxkbcommon, pcre, json_c, dbus_libs
+, pango, cairo, libinput, libcap, pam, gdk_pixbuf, libpthreadstubs
+, libXdmcp
+, buildDocs ? true
 }:
 
 stdenv.mkDerivation rec {
   name = "sway-${version}";
-  version = "git-2016-02-08";
+  version = "0.15.1";
 
   src = fetchFromGitHub {
-    owner = "Sircmpwn";
+    owner = "swaywm";
     repo = "sway";
-
-    rev = "16e904634c65128610537bed7fcb16ac3bb45165";
-    sha256 = "04qvdjaarglq3qsjbb9crjkad3y1v7s51bk82sl8w26c71jbhklg";
+    rev = version;
+    sha256 = "00prns3dnafd19ap774p8v994i3p185ji0dnp2xxbkgh2z7sbwpi";
   };
 
-  nativeBuildInputs = [ makeWrapper cmake pkgconfig asciidoc libxslt docbook_xsl ];
+  nativeBuildInputs = [
+    cmake pkgconfig
+  ] ++ stdenv.lib.optional buildDocs [ asciidoc libxslt docbook_xsl ];
+  buildInputs = [
+    wayland wlc libxkbcommon pcre json_c dbus_libs
+    pango cairo libinput libcap pam gdk_pixbuf libpthreadstubs
+    libXdmcp
+  ];
 
-  buildInputs = [ wayland wlc libxkbcommon pixman fontconfig pcre json_c dbus_libs ];
+  enableParallelBuilding = true;
 
-  patchPhase = ''
-    sed -i s@/etc/sway@$out/etc/sway@g CMakeLists.txt;
-  '';
-
-  makeFlags = "PREFIX=$(out)";
-  installPhase = "PREFIX=$out make install";
-
-  LD_LIBRARY_PATH = stdenv.lib.makeLibraryPath [ wlc dbus_libs ];
-  preFixup = ''
-    wrapProgram $out/bin/sway \
-      --prefix LD_LIBRARY_PATH : "${LD_LIBRARY_PATH}";
-  '';
+  cmakeFlags = "-DVERSION=${version} -DLD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib";
 
   meta = with stdenv.lib; {
     description = "i3-compatible window manager for Wayland";
-    homepage    = "http://swaywm.org";
+    homepage    = http://swaywm.org;
     license     = licenses.mit;
     platforms   = platforms.linux;
-    maintainers = with maintainers; [ ];
+    maintainers = with maintainers; [ primeos ]; # Trying to keep it up-to-date.
   };
 }

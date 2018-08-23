@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, fftw, qtbase }:
+{ stdenv, fetchFromGitHub, fftw, qtbase, qmake }:
 
 stdenv.mkDerivation rec {
   name = "libkeyfinder-${version}";
@@ -11,16 +11,13 @@ stdenv.mkDerivation rec {
     owner = "ibsh";
   };
 
+  nativeBuildInputs = [ qmake ];
   buildInputs = [ fftw qtbase ];
 
   postPatch = ''
     substituteInPlace LibKeyFinder.pro \
       --replace "/usr/local" "$out" \
       --replace "-stdlib=libc++" ""
-  '';
-
-  configurePhase = ''
-    qmake
   '';
 
   enableParallelBuilding = true;
@@ -37,6 +34,5 @@ stdenv.mkDerivation rec {
     homepage = http://www.ibrahimshaath.co.uk/keyfinder/;
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

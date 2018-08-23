@@ -7,10 +7,10 @@ let
   cfg = config.services.octoprint;
 
   baseConfig = {
-    plugins.cura.cura_engine = "${pkgs.curaengine}/bin/CuraEngine";
+    plugins.cura.cura_engine = "${pkgs.curaengine_stable}/bin/CuraEngine";
     server.host = cfg.host;
     server.port = cfg.port;
-    webcam.ffmpeg = "${pkgs.ffmpeg}/bin/ffmpeg";
+    webcam.ffmpeg = "${pkgs.ffmpeg.bin}/bin/ffmpeg";
   };
 
   fullConfig = recursiveUpdate cfg.extraConfig baseConfig;
@@ -102,7 +102,7 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       path = [ pluginsEnv ];
-      environment.PYTHONPATH = makeSearchPath pkgs.python.sitePackages [ pluginsEnv ];
+      environment.PYTHONPATH = makeSearchPathOutput "lib" pkgs.python.sitePackages [ pluginsEnv ];
 
       preStart = ''
         mkdir -p "${cfg.stateDir}"
@@ -117,7 +117,7 @@ in
       '';
 
       serviceConfig = {
-        ExecStart = "${pkgs.octoprint}/bin/octoprint -b ${cfg.stateDir}";
+        ExecStart = "${pkgs.octoprint}/bin/octoprint serve -b ${cfg.stateDir}";
         User = cfg.user;
         Group = cfg.group;
         PermissionsStartOnly = true;

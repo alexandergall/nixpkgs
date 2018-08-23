@@ -1,4 +1,11 @@
 { pkgs ? import <nixpkgs> {} }:
+## we default to importing <nixpkgs> here, so that you can use
+## a simple shell command to insert new sha256's into this file
+## e.g. with emacs C-u M-x shell-command
+##
+##     nix-prefetch-url sources.nix -A {stable{,.mono,.gecko64,.gecko32}, unstable, staging, winetricks}
+
+# here we wrap fetchurl and fetchFromGitHub, in order to be able to pass additional args around it
 let fetchurl = args@{url, sha256, ...}:
   pkgs.fetchurl { inherit url sha256; } // args;
     fetchFromGitHub = args@{owner, repo, rev, sha256, ...}:
@@ -6,57 +13,53 @@ let fetchurl = args@{url, sha256, ...}:
 in rec {
 
   stable = fetchurl rec {
-    version = "1.8.1";
-    url = "mirror://sourceforge/wine/wine-${version}.tar.bz2";
-    sha256 = "15ya496qq24ipqii7ij8x8h5x8n21vgqa4h6binb74w5mzdd76hl";
+    version = "3.0";
+    url = "https://dl.winehq.org/wine/source/3.0/wine-${version}.tar.xz";
+    sha256 = "1v7vq9iinkscbq6wg85fb0d2137660fg2nk5iabxkl2wr850asil";
 
     ## see http://wiki.winehq.org/Gecko
     gecko32 = fetchurl rec {
-      version = "2.40";
-      url = "mirror://sourceforge/wine/wine_gecko-${version}-x86.msi";
-      sha256 = "00nkaxhb9dwvf53ij0q75fb9fh7pf43hmwx6rripcax56msd2a8s";
+      version = "2.47";
+      url = "http://dl.winehq.org/wine/wine-gecko/${version}/wine_gecko-${version}-x86.msi";
+      sha256 = "0fk4fwb4ym8xn0i5jv5r5y198jbpka24xmxgr8hjv5b3blgkd2iv";
     };
     gecko64 = fetchurl rec {
-      version = "2.40";
-      url = "mirror://sourceforge/wine/wine_gecko-${version}-x86_64.msi";
-      sha256 = "0c4jikfzb4g7fyzp0jcz9fk2rpdl1v8nkif4dxcj28nrwy48kqn3";
+      version = "2.47";
+      url = "http://dl.winehq.org/wine/wine-gecko/${version}/wine_gecko-${version}-x86_64.msi";
+      sha256 = "0zaagqsji6zaag92fqwlasjs8v9hwjci5c2agn9m7a8fwljylrf5";
     };
+
     ## see http://wiki.winehq.org/Mono
     mono = fetchurl rec {
-      version = "4.5.6";
-      url = "mirror://sourceforge/wine/wine-mono-${version}.msi";
-      sha256 = "09dwfccvfdp3walxzp6qvnyxdj2bbyw9wlh6cxw2sx43gxriys5c";
+      version = "4.7.1";
+      url = "http://dl.winehq.org/wine/wine-mono/${version}/wine-mono-${version}.msi";
+      sha256 = "1ai9qsrgiwd371pyqr3mjaddaczly5d1z68r4lxl3hrkz2vmv39c";
     };
   };
 
   unstable = fetchurl rec {
-    version = "1.9.7";
-    url = "mirror://sourceforge/wine/wine-${version}.tar.bz2";
-    sha256 = "1v47i0pxqcixnh06x23kzp2dbz1cf3d2sric0bw6xqh54ph5yw29";
-    inherit (stable) mono;
-    gecko32 = fetchurl rec {
-      version = "2.44";
-      url = "http://dl.winehq.org/wine/wine-gecko/${version}/wine_gecko-${version}-x86.msi";
-      sha256 = "0fbd8pxkihhfxs5mcx8n0rcygdx43qdrp2x8hq1s1cvifp8lm9kp";
-    };
-    gecko64 = fetchurl rec {
-      version = "2.44";
-      url = "http://dl.winehq.org/wine/wine-gecko/${version}/wine_gecko-${version}-x86_64.msi";
-      sha256 = "0qb6zx4ycj37q26y2zn73w49bxifdvh9n4riy39cn1kl7c6mm3k2";
-    };
+    # NOTE: Don't forget to change the SHA256 for staging as well.
+    version = "3.3";
+    url = "https://dl.winehq.org/wine/source/3.x/wine-${version}.tar.xz";
+    sha256 = "0cx31jsll7mxd9r7v0vpahajqwb6da6cpwybv06l5ydkgfrbv505";
+    inherit (stable) mono gecko32 gecko64;
   };
 
   staging = fetchFromGitHub rec {
+    # https://github.com/wine-compholio/wine-staging/releases
     inherit (unstable) version;
-    sha256 = "1h5hwd07qyx0qw5whf6lcp7v57kqd6mrrcvwwg1bydir68b0zp16";
-    owner = "wine-compholio";
+    # FIXME update winestaging sources, when 3.3 is released
+    # FIXME then revert the staging derivation in ./default.nix
+    sha256 = "0000000000000000000000000000000000000000000000000000000000000000";
+    owner = "wine-staging";
     repo = "wine-staging";
     rev = "v${version}";
   };
 
   winetricks = fetchFromGitHub rec {
-    version = "20160219";
-    sha256 = "1wqsbdh2qa5xxswilniki9wzbhlmkl6jqmryjd9f5smirr7ryy2r";
+    # https://github.com/Winetricks/winetricks/releases
+    version = "20180217";
+    sha256 = "0k3vlsqjbzys5dfbxwgw76al8gh44jsjqkc06va103frkrgjxvc5";
     owner = "Winetricks";
     repo = "winetricks";
     rev = version;

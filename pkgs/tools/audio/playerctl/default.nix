@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool, which, gnome, glib,
+{ stdenv, fetchFromGitHub, autoconf, automake, libtool, which, gnome2, glib,
   pkgconfig, gobjectIntrospection }:
 
 stdenv.mkDerivation rec {
@@ -12,8 +12,9 @@ stdenv.mkDerivation rec {
     sha256 = "0b4pg5pwblgbf6kvvynzh9dshfikxy5c2ks7733n7wza5wkpgmng";
   };
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    which autoconf automake libtool gnome.gtkdoc glib pkgconfig
+    which autoconf automake libtool gnome2.gtkdoc glib
     gobjectIntrospection
   ];
 

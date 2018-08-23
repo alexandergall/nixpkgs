@@ -1,5 +1,5 @@
 { stdenv, fetchFromGitHub, pkgconfig, dbus, mono, makeWrapper, nant
-, shared_mime_info, gtksourceview, gtk
+, shared-mime-info, gtksourceview, gtk2
 , targetVersion ? "4.5" }:
 
 let
@@ -16,9 +16,10 @@ in stdenv.mkDerivation rec {
     sha256 = "174abdwfpq8i3ijx6bwqll16lx7xwici374rgsbymyk8g8mla094";
   };
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig mono makeWrapper nant shared_mime_info gtksourceview
-    gtk
+    mono makeWrapper nant shared-mime-info gtksourceview
+    gtk2
   ];
 
   patches = [ ./config.patch ];
@@ -41,5 +42,6 @@ in stdenv.mkDerivation rec {
   meta = with stdenv.lib; {
     description = "The Boo Programming Language";
     platforms = platforms.linux;
+    broken = true;
   };
 }
