@@ -30,7 +30,7 @@ let
     ++ optional sssd "sss"
     ++ optionals ldap [ "ldap" ]
     ++ optionals mymachines [ "mymachines" ]
-    ++ optionals tacacs [ "tacacs" ]
+    ++ optionals tacplus [ "tacplus" ]
     ++ [ "systemd" ];
 
   shadowArray = [ "files" ]
