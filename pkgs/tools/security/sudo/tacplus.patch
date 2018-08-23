@@ -1,25 +1,25 @@
-diff -Naur sudo-1.8.15.orig/plugins/sudoers/parse.c sudo-1.8.15/plugins/sudoers/parse.c
---- sudo-1.8.15.orig/plugins/sudoers/parse.c	2015-11-01 00:35:24.000000000 +0100
-+++ sudo-1.8.15/plugins/sudoers/parse.c	2017-10-20 16:21:41.487923207 +0200
-@@ -31,6 +31,8 @@
- #include <ctype.h>
- #include <pwd.h>
+diff -r -u sudo-1.8.22-orig/plugins/sudoers/parse.c sudo-1.8.22/plugins/sudoers/parse.c
+--- sudo-1.8.22-orig/plugins/sudoers/parse.c	2018-01-15 18:31:32.000000000 +0100
++++ sudo-1.8.22/plugins/sudoers/parse.c	2018-08-22 15:50:36.060355947 +0200
+@@ -32,6 +32,8 @@
  #include <grp.h>
+ #include <pwd.h>
+ #include <time.h>
 +#include <dlfcn.h>
 +#include <libaudit.h>
  
  #include "sudoers.h"
  #include "parse.h"
-@@ -145,6 +147,8 @@
+@@ -147,6 +149,8 @@
  sudo_file_lookup(struct sudo_nss *nss, int validated, int pwflag)
  {
-     int match, host_match, runas_match, cmnd_match;
+     int match, host_match, runas_match, cmnd_match, timeout;
 +    int trytacplus = 1;
 +    struct passwd tacpluspw, *pw;
      struct cmndspec *cs;
      struct cmndtag *tags = NULL;
      struct privilege *priv;
-@@ -155,6 +159,8 @@
+@@ -158,6 +162,8 @@
      if (nss->handle == NULL)
  	debug_return_int(validated);
  
@@ -28,7 +28,7 @@ diff -Naur sudo-1.8.15.orig/plugins/sudoers/parse.c sudo-1.8.15/plugins/sudoers/
      /*
       * Only check the actual command if pwflag is not set.
       * It is set for the "validate", "list" and "kill" pseudo-commands.
-@@ -173,7 +179,7 @@
+@@ -176,7 +182,7 @@
  	CLR(validated, FLAG_NO_HOST);
  	match = DENY;
  	TAILQ_FOREACH(us, &userspecs, entries) {
@@ -36,10 +36,10 @@ diff -Naur sudo-1.8.15.orig/plugins/sudoers/parse.c sudo-1.8.15/plugins/sudoers/
 +	    if (userlist_matches(pw, &us->users) != ALLOW)
  		continue;
  	    TAILQ_FOREACH(priv, &us->privileges, entries) {
- 		if (hostlist_matches(&priv->hostlist) != ALLOW)
-@@ -207,8 +213,9 @@
- 	debug_return_int(validated);
+ 		if (hostlist_matches(sudo_user.pw, &priv->hostlist) != ALLOW)
+@@ -215,8 +221,9 @@
  
+     time(&now);
      match = UNSPEC;
 + relook:
      TAILQ_FOREACH_REVERSE(us, &userspecs, userspec_list, entries) {
@@ -48,7 +48,7 @@ diff -Naur sudo-1.8.15.orig/plugins/sudoers/parse.c sudo-1.8.15/plugins/sudoers/
  	    continue;
  	CLR(validated, FLAG_NO_USER);
  	TAILQ_FOREACH_REVERSE(priv, &us->privileges, privilege_list, entries) {
-@@ -339,6 +346,47 @@
+@@ -358,6 +365,47 @@
  		}
  	    }
  	}

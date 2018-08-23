@@ -10,6 +10,8 @@ stdenv.mkDerivation rec {
     sha256 = "1x8y80bdagsbvnzv97zipq6fcgqhmia020yv9ja4k3varawx5315";
   };
 
+  patches = [ ./libtacplus-map.patch ];
+
   preConfigure = "./auto.sh";
 
   configureFlags = [ "--oldincludedir=\${out}/include" ];

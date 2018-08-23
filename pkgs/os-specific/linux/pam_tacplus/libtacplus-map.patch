@@ -1,0 +1,12 @@
+diff -u libtacplus-map-orig/map_tacplus_user.c libtacplus-map/map_tacplus_user.c
+--- libtacplus-map-orig/map_tacplus_user.c	2018-08-22 15:17:17.774527548 +0200
++++ libtacplus-map/map_tacplus_user.c	2018-08-22 15:17:55.646831246 +0200
+@@ -328,7 +328,7 @@
+         char *eptr;
+         if(strtoul(dptr->d_name, &eptr, 10) && !*eptr) {
+             /* all numeric, it's a PID */
+-            char nmbuf[128]; /* always short path */
++            char nmbuf[512]; /* always short path */
+             char sess_str[16];
+             int fd, cnt, sess=0;
+             snprintf(nmbuf, sizeof nmbuf, "/proc/%s/sessionid", dptr->d_name);
