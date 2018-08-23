@@ -39,7 +39,7 @@ fetchurl ({
       "$tmpfile" > "$out"
 
     if [ ! -s "$out" ]; then
-      echo "error: Filtered patch '$out$' is empty (while the original patch file was not)!" 1>&2
+      echo "error: Filtered patch '$out' is empty (while the original patch file was not)!" 1>&2
       echo "Check your includes and excludes." 1>&2
       echo "Normalizd patch file was:" 1>&2
       cat "$tmpfile" 1>&2
