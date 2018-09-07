@@ -129,7 +129,7 @@ in
             ## FIXME: add support for mask
           };
         });
-        default = [];
+        default = {};
         description = ''
           A set of view definitions.
         '';
