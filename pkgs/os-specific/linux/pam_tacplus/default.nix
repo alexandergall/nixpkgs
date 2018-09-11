@@ -15,5 +15,5 @@ stdenv.mkDerivation rec {
 
   preConfigure = "./auto.sh";
 
-  configureFlags = [ "--oldincludedir=\${out}/include" "--with-openssl=${openssl}" ];
+  configureFlags = [ "--oldincludedir=\${out}/include" "--with-openssl=${openssl.dev}" ];
 }
