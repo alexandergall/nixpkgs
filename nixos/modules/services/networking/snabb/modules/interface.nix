@@ -228,6 +228,18 @@ in
                 to which all untagged packets are assigned.
               '';
             };
+            mtu = mkOption {
+              type = types.nullOr types.int;
+              default = null;
+              description = ''
+                The MTU of the subinterface in bytes, including the full Ethernet
+                header.  In particular, if the interface is configured as
+                VLAN trunk, the 4 bytes attributed to the VLAN tag must be
+                included in the MTU.  The MTU must not exceed that of the trunk
+                on which it is based.  By default, the MTU is inherited from
+                the trunk.
+              '';
+            };
             addressFamilies = mkOption {
               default = null;
               description = ''
