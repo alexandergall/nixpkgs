@@ -280,7 +280,10 @@ in
           in concatStringsSep "\n" (map (line: concatStrings [ spaces line ])
                                         lines);
 
-      acConfig = name: ac:
+      subIntfName = intf: vid:
+        intf.name + "." + toString vid;
+
+      acConfig = name: ac: ignore:
         ''
           ${name} = "${ac}",
         '';
@@ -319,7 +322,7 @@ in
           }, -- cc
         '';
 
-      pwConfig = name: pw:
+      pwConfig = name: pw: ignore:
         ''
           ${name} = {
             address = "${pw.address}",
@@ -339,14 +342,14 @@ in
         '';
 
       mkConfigIterator = attr: f:
-        set:
+        set: data:
           if isAttrs set.${attr} then
-            concatStrings (map (name: f name (getAttr name set.${attr}))
+            concatStrings (map (name: f name (getAttr name set.${attr}) data)
                                (attrNames set.${attr}))
           else
-            concatStrings (map f set.${attr});
+            concatStrings (map (item: f item data) set.${attr});
 
-      vplsConfig = name: vpls:
+      vplsConfig = name: vpls: ignore:
         ''
           ${name} = {
             description = "${vpls.description}",
@@ -383,13 +386,13 @@ in
           ac = {
         '') +
         (indentBlock 4
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls)) +
+         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
         (indentBlock 2
         ''
           },
           pw = {
         '') +
-        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls)) +
+        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls null)) +
         ''
             }, -- pw
           }, -- vpls ${name}
@@ -415,15 +418,23 @@ in
                },
              '')
           else
-            throw ("no valid address family found for"
-                    + " subinterface ${subint}")) +
+            "") +
         ''}, -- afs'';
 
-      vlansConfig = conf:
+      vlansConfig = conf: intf:
         ''
           {
             description = "${conf.description}",
             vid = ${toString conf.vid},
+            ${if conf.mtu != null then
+                if conf.mtu <= intf.mtu then
+                  "mtu = ${toString conf.mtu},"
+                else
+                  throw ("MTU ${toString conf.mtu} of subinterface "
+                    + "${subIntfName intf conf.vid} exceeds MTU "
+                    + "${toString intf.mtu} of interface ${intf.name}")
+              else
+                ""}
         '' +
         optionalString (conf.addressFamilies != null)
           (indentBlock 2 ''${addressFamiliesConfig conf}'' + "\n") +
@@ -431,7 +442,7 @@ in
           }, -- vlan
         '';
 
-      interfaceConfig = intf:
+      interfaceConfig = intf: ignore:
         with (import ../../lib/devices.nix lib);
         let
           intfSnabb = findSingle (s: s.name == intf.name) null null
@@ -512,7 +523,7 @@ in
                  vlans = {
              '') +
              ((indentBlock 6 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk))) +
+                                                intf.trunk intf))) +
              ''
                    }, -- vlans
                  }, -- trunk
@@ -558,13 +569,13 @@ in
             };
           in
           (indentBlock 4 ((mkConfigIterator "interfaces" interfaceConfig)
-                                            ourInterfaces))) +
+                                            ourInterfaces null))) +
           (indentBlock 2
           ''
             }, -- interfaces
             vpls = {
           '') +
-          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config)) +
+          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config null)) +
           ''
               } -- vpls
             }
