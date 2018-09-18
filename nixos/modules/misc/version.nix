@@ -85,7 +85,7 @@ in
     defaultChannel = mkOption {
       internal = true;
       type = types.str;
-      default = file:///ALX/channels/nixos-18.03.ALX;
+      default = file:///ALX/channels/nixos-ALX;
       description = "Default NixOS channel to which the root user is subscribed.";
     };
 
