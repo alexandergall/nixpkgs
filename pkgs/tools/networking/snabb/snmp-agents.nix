@@ -6,7 +6,7 @@ let
   ## net_snmp is currently built with perl522 to work around a known
   ## problem.  We also force perl522 to be used to build this module
   ## as well as the other dependencies to get the correct INC paths.
-  buildPerlPackage = callPackage ../../../development/perl-modules/generic perl522;
+  buildPerlPackage = callPackage ../../../development/perl-modules/generic { perl = perl522; };
 
   ## Copied from ../../../top-level/perl-packages.nix, don't know how
   ## to override the perl version
