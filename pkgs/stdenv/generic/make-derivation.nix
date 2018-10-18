@@ -83,9 +83,7 @@ rec {
       doCheck' = doCheck && stdenv.hostPlatform == stdenv.buildPlatform;
       doInstallCheck' = doInstallCheck && stdenv.hostPlatform == stdenv.buildPlatform;
 
-      outputs' =
-        outputs ++
-        (if separateDebugInfo then assert stdenv.hostPlatform.isLinux; [ "debug" ] else []);
+      outputs' = outputs ++ lib.optional separateDebugInfo "debug";
 
       fixedOutputDrv = attrs ? outputHash;
       noNonNativeDeps = builtins.length (depsBuildTarget ++ depsBuildTargetPropagated
@@ -176,7 +174,7 @@ rec {
         // {
           # A hack to make `nix-env -qa` and `nix search` ignore broken packages.
           # TODO(@oxij): remove this assert when something like NixOS/nix#1771 gets merged into nix.
-          name = assert validity.handled; name + lib.optionalString
+          name = assert validity.handled && (separateDebugInfo -> stdenv.hostPlatform.isLinux); name + lib.optionalString
             # Fixed-output derivations like source tarballs shouldn't get a host
             # suffix. But we have some weird ones with run-time deps that are
             # just used for their side-affects. Those might as well since the
@@ -187,7 +185,15 @@ rec {
           builder = attrs.realBuilder or stdenv.shell;
           args = attrs.args or ["-e" (attrs.builder or ./default-builder.sh)];
           inherit stdenv;
-          inherit (stdenv.hostPlatform) system;
+
+          # The `system` attribute of a derivation has special meaning to Nix.
+          # Derivations set it to choose what sort of machine could be used to
+          # execute the build, The build platform entirely determines this,
+          # indeed more finely than Nix knows or cares about. The `system`
+          # attribute of `buildPlatfom` matches Nix's degree of specificity.
+          # exactly.
+          inherit (stdenv.buildPlatform) system;
+
           userHook = config.stdenv.userHook or null;
           __ignoreNulls = true;
 
