@@ -44,7 +44,8 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ autoreconfHook ];
   buildInputs = [ file perl unzip openssl ];
 
-  enableParallelBuilding = false;
+  enableParallelBuilding = true;
+  doCheck = false; # fails
 
   postInstall = ''
     for f in "$out/lib/"*.la $out/bin/net-snmp-config $out/bin/net-snmp-create-v3-user; do

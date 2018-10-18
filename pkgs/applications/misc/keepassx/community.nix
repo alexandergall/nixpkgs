@@ -14,6 +14,7 @@
 , yubikey-personalization
 , libXi
 , qtx11extras
+, qtmacextras
 
 , withKeePassBrowser ? true
 , withKeePassSSHAgent ? true
@@ -25,18 +26,32 @@ with stdenv.lib;
 
 stdenv.mkDerivation rec {
   name = "keepassxc-${version}";
-  version = "2.3.0";
+  version = "2.3.4";
 
   src = fetchFromGitHub {
     owner = "keepassxreboot";
     repo = "keepassxc";
     rev = "${version}";
-    sha256 = "1zch1qbqgphhp2p2kvjlah8s337162m69yf4y00kcnfb3539ii5f";
+    sha256 = "1gja402dsbws4z8ybnhqbw7rc9svgqnshqjgf7158d6x0ni386m3";
   };
 
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.cc.isClang "-Wno-old-style-cast";
+  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.cc.isClang [
+    "-Wno-old-style-cast"
+    "-Wno-error"
+    "-D__BIG_ENDIAN__=${if stdenv.isBigEndian then "1" else "0"}"
+  ];
 
-  patches = [ ./darwin.patch ];
+  postPatch = stdenv.lib.optionalString stdenv.isDarwin ''
+    substituteInPlace CMakeLists.txt \
+      --replace "/usr/local/bin" "../bin" \
+      --replace "/usr/local/share/man" "../share/man"
+  '';
+  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-rpath ${libargon2}/lib";
+
+  patches = [
+    ./darwin.patch
+    ./qt511.patch
+  ];
 
   cmakeFlags = [
     "-DKEEPASSXC_BUILD_TYPE=Release"
@@ -72,7 +87,7 @@ stdenv.mkDerivation rec {
     qtx11extras
     yubikey-personalization
     zlib
-  ];
+  ] ++ stdenv.lib.optional stdenv.isDarwin qtmacextras;
 
   postInstall = optionalString stdenv.isDarwin ''
     # Make it work without Qt in PATH.

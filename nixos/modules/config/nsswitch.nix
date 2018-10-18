@@ -1,6 +1,6 @@
 # Configuration for the Name Service Switch (/etc/nsswitch.conf).
 
-{ config, lib, pkgs, ... }:
+{ config, lib, ... }:
 
 with lib;
 
@@ -18,24 +18,24 @@ let
   tacplus = canLoadExternalModules && config.users.tacplus.enable;
 
   hostArray = [ "files" ]
-    ++ optionals mymachines [ "mymachines" ]
-    ++ optionals nssmdns [ "mdns_minimal [NOTFOUND=return]" ]
-    ++ optionals nsswins [ "wins" ]
-    ++ optionals resolved ["resolve [!UNAVAIL=return]"]
+    ++ optional mymachines "mymachines"
+    ++ optional nssmdns "mdns_minimal [NOTFOUND=return]"
+    ++ optional nsswins "wins"
+    ++ optional resolved "resolve [!UNAVAIL=return]"
     ++ [ "dns" ]
-    ++ optionals nssmdns [ "mdns" ]
-    ++ optionals myhostname ["myhostname" ];
+    ++ optional nssmdns "mdns"
+    ++ optional myhostname "myhostname";
 
   passwdArray = [ "files" ]
     ++ optional sssd "sss"
-    ++ optionals ldap [ "ldap" ]
-    ++ optionals mymachines [ "mymachines" ]
-    ++ optionals tacplus [ "tacplus" ]
+    ++ optional ldap "ldap"
+    ++ optional mymachines "mymachines"
+    ++ optional tacplus "tacplus"
     ++ [ "systemd" ];
 
   shadowArray = [ "files" ]
     ++ optional sssd "sss"
-    ++ optionals ldap [ "ldap" ];
+    ++ optional ldap "ldap";
 
   servicesArray = [ "files" ]
     ++ optional sssd "sss";

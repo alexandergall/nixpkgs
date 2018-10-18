@@ -145,12 +145,17 @@ in {
   };
 
   config = mkIf cfg.enable {
-    users.extraGroups = optional (cfg.group == "jenkins") {
+    # server references the dejavu fonts
+    environment.systemPackages = [
+      pkgs.dejavu_fonts
+    ];
+
+    users.groups = optional (cfg.group == "jenkins") {
       name = "jenkins";
       gid = config.ids.gids.jenkins;
     };
 
-    users.extraUsers = optional (cfg.user == "jenkins") {
+    users.users = optional (cfg.user == "jenkins") {
       name = "jenkins";
       description = "jenkins user";
       createHome = true;
@@ -200,10 +205,12 @@ in {
           ${replacePlugins}
         '';
 
+      # For reference: https://wiki.jenkins.io/display/JENKINS/JenkinsLinuxStartupScript
       script = ''
         ${pkgs.jdk}/bin/java ${concatStringsSep " " cfg.extraJavaOptions} -jar ${cfg.package}/webapps/jenkins.war --httpListenAddress=${cfg.listenAddress} \
                                                   --httpPort=${toString cfg.port} \
                                                   --prefix=${cfg.prefix} \
+                                                  -Djava.awt.headless=true \
                                                   ${concatStringsSep " " cfg.extraOptions}
       '';
 

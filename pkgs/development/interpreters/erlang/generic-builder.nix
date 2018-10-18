@@ -1,4 +1,4 @@
-{ pkgs, stdenv, fetchurl, fetchFromGitHub, makeWrapper, gawk, gnum4, gnused
+{ pkgs, stdenv, fetchFromGitHub, makeWrapper, gawk, gnum4, gnused
 , libxml2, libxslt, ncurses, openssl, perl, autoreconfHook
 , openjdk ? null # javacSupport
 , unixODBC ? null # odbcSupport
@@ -57,6 +57,8 @@ in stdenv.mkDerivation ({
 
   debugInfo = enableDebugInfo;
 
+  enableParallelBuilding = true;
+
   # Clang 4 (rightfully) thinks signed comparisons of pointers with NULL are nonsense
   prePatch = ''
     substituteInPlace lib/wx/c_src/wxe_impl.cpp --replace 'temp > NULL' 'temp != NULL'
@@ -65,9 +67,9 @@ in stdenv.mkDerivation ({
   '';
 
   postPatch = ''
-    ${postPatch}
-
     patchShebangs make
+
+    ${postPatch}
   '';
 
   preConfigure = ''
@@ -88,9 +90,9 @@ in stdenv.mkDerivation ({
   # (PDFs are generated only when fop is available).
 
   postInstall = ''
-    ${postInstall}
-
     ln -s $out/lib/erlang/lib/erl_interface*/bin/erl_call $out/bin/erl_call
+
+    ${postInstall}
   '';
 
   # Some erlang bin/ scripts run sed and awk

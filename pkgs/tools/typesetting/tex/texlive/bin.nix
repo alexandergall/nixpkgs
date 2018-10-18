@@ -1,10 +1,10 @@
-{ stdenv, lib, fetchurl
+{ stdenv, fetchurl
 , texlive
-, zlib, bzip2, ncurses, libiconv, libpng, flex, bison, libX11, libICE, xproto
-, freetype, t1lib, gd, libXaw, icu, ghostscript, ed, libXt, libXpm, libXmu, libXext
-, xextproto, perl, libSM, ruby, expat, curl, libjpeg, python, fontconfig, pkgconfig
-, poppler, libpaper, graphite2, zziplib, harfbuzz, texinfo, potrace, gmp, mpfr
-, xpdf, cairo, pixman, xorg, clisp
+, zlib, libiconv, libpng, libX11
+, freetype, gd, libXaw, icu, ghostscript, libXpm, libXmu, libXext
+, perl, pkgconfig
+, poppler, libpaper, graphite2, zziplib, harfbuzz, potrace, gmp, mpfr
+, cairo, pixman, xorg, clisp, biber
 , makeWrapper
 }:
 
@@ -27,6 +27,14 @@ let
         "http://ftp.math.utah.edu/pub/tex/historic/systems/texlive/${year}/texlive-${year}0524-source.tar.xz";
       sha256 = "1amjrxyasplv4alfwcxwnw4nrx7dz2ydmddkq16k6hg90i9njq81";
     };
+
+    patches = [
+      (fetchurl {
+        name = "texlive-poppler-0.59.patch";
+        url = https://git.archlinux.org/svntogit/packages.git/plain/trunk/texlive-poppler-0.59.patch?h=packages/texlive-bin&id=6308ec39bce2a4d735f6ff8a4e94473748d7b450;
+        sha256 = "1c4ikq4kxw48bi3i33bzpabrjvbk01fwjr2lz20gkc9kv8l0bg3n";
+      })
+    ];
 
     configureFlags = [
       "--with-banner-add=/NixOS.org"
@@ -58,7 +66,7 @@ texliveYear = year;
 core = stdenv.mkDerivation rec {
   name = "texlive-bin-${version}";
 
-  inherit (common) src;
+  inherit (common) src patches;
 
   outputs = [ "out" "doc" ];
 
@@ -87,12 +95,13 @@ core = stdenv.mkDerivation rec {
 
   configureFlags = common.configureFlags
     ++ [ "--without-x" ] # disable xdvik and xpdfopen
-    ++ map (what: "--disable-${what}") [
+    ++ map (what: "--disable-${what}") ([
       "dvisvgm" "dvipng" # ghostscript dependency
       "luatex" "luajittex" "mp" "pmp" "upmp" "mf" # cairo would bring in X and more
       "xetex" "bibtexu" "bibtex8" "bibtex-x" "upmendex" # ICU isn't small
-    ]
+    ] ++ stdenv.lib.optional (stdenv.hostPlatform.isPower && stdenv.hostPlatform.is64bit) "mfluajit")
     ++ [ "--without-system-harfbuzz" "--without-system-icu" ] # bogus configure
+    
     ;
 
   enableParallelBuilding = true;
@@ -136,6 +145,9 @@ core = stdenv.mkDerivation rec {
     mv "$out"/share/{man,info} "$doc"/doc
   '' + cleanBrokenLinks;
 
+  # needed for poppler and xpdf
+  CXXFLAGS = stdenv.lib.optionalString stdenv.cc.isClang "-std=c++11";
+
   setupHook = ./setup-hook.sh; # TODO: maybe texmf-nix -> texmf (and all references)
   passthru = { inherit version buildInputs; };
 
@@ -168,7 +180,7 @@ core-big = stdenv.mkDerivation { #TODO: upmendex
         # http://tex.stackexchange.com/questions/97999/when-to-use-luajittex-in-favour-of-luatex
       ];
 
-  patches = [ ./luatex-gcc7.patch ];
+  patches = common.patches ++ [ ./luatex-gcc7.patch ];
 
   configureScript = ":";
 
@@ -192,6 +204,8 @@ core-big = stdenv.mkDerivation { #TODO: upmendex
   preBuild = "cd texk/web2c";
   CXXFLAGS = "-std=c++11 -Wno-reserved-user-defined-literal"; # TODO: remove once texlive 2018 is out?
   enableParallelBuilding = true;
+
+  doCheck = false; # fails
 
   # now distribute stuff into outputs, roughly as upstream TL
   # (uninteresting stuff remains in $out, typically duplicates from `core`)
@@ -248,6 +262,7 @@ dvipng = stdenv.mkDerivation {
 };
 
 
+inherit biber;
 bibtexu = bibtex8;
 bibtex8 = stdenv.mkDerivation {
   name = "texlive-bibtex-x.bin-${version}";
@@ -298,6 +313,10 @@ xindy = stdenv.mkDerivation {
   name = "texlive-xindy.bin-${version}";
 
   inherit (common) src;
+
+  # If unset, xindy will try to mkdir /homeless-shelter
+  HOME = ".";
+
   prePatch = "cd utils/xindy";
   # hardcode clisp location
   postPatch = ''
@@ -324,5 +343,3 @@ xindy = stdenv.mkDerivation {
 };
 
 }
-
-

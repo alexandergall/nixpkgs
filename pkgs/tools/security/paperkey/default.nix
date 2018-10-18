@@ -9,6 +9,13 @@ stdenv.mkDerivation rec {
     sha256 = "1prd2jaf4zjad3xhv160hmi5n408ssljfg7iz90jxs9w111pjwy4";
   };
 
+  postPatch = ''
+    for a in checks/*.sh ; do
+      substituteInPlace $a \
+        --replace /bin/echo echo
+    done
+  '';
+
   enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
@@ -21,7 +28,7 @@ stdenv.mkDerivation rec {
     '';
     homepage = http://www.jabberwocky.com/software/paperkey/;
     license = licenses.gpl2;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ skeidel ];
   };
 }

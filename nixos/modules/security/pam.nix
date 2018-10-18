@@ -245,6 +245,11 @@ let
           password, KDE will prompt separately after login.
         '';
       };
+      sssdStrictAccess = mkOption {
+        default = false;
+        type = types.bool;
+        description = "enforce sssd access control";
+      };
 
       enableGnomeKeyring = mkOption {
         default = false;
@@ -277,11 +282,13 @@ let
           # Account management.
           ${optionalString (config.users.tacplus.enable && cfg.tacplusAuth)
               "account include tacplus"}
-          account sufficient pam_unix.so
+          account ${if cfg.sssdStrictAccess then "required" else "sufficient"} pam_unix.so
           ${optionalString use_ldap
               "account sufficient ${pam_ldap}/lib/security/pam_ldap.so"}
-          ${optionalString config.services.sssd.enable
+          ${optionalString (config.services.sssd.enable && cfg.sssdStrictAccess==false)
               "account sufficient ${pkgs.sssd}/lib/security/pam_sss.so"}
+          ${optionalString (config.services.sssd.enable && cfg.sssdStrictAccess)
+              "account [default=bad success=ok user_unknown=ignore] ${pkgs.sssd}/lib/security/pam_sss.so"}
           ${optionalString config.krb5.enable
               "account sufficient ${pam_krb5}/lib/security/pam_krb5.so"}
 
@@ -401,7 +408,7 @@ let
           ${optionalString (cfg.enableGnomeKeyring)
               "session optional ${pkgs.gnome3.gnome-keyring}/lib/security/pam_gnome_keyring.so auto_start"}
           ${optionalString (config.virtualisation.lxc.lxcfs.enable)
-               "session optional ${pkgs.lxcfs}/lib/security/pam_cgfs.so -c freezer,memory,name=systemd,unified,cpuset"}
+               "session optional ${pkgs.lxc}/lib/security/pam_cgfs.so -c all"}
         '');
     };
 
@@ -457,6 +464,10 @@ in
           <varname>item</varname>, and <varname>value</varname>
           attribute.  The syntax and semantics of these attributes
           must be that described in the limits.conf(5) man page.
+
+          Note that these limits do not apply to systemd services,
+          whose limits can be changed via <option>systemd.extraConfig</option>
+          instead.
        '';
     };
 

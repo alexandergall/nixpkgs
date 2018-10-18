@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name = "libunistring-${version}";
-  version = "0.9.8";
+  version = "0.9.10";
 
   src = fetchurl {
     url = "mirror://gnu/libunistring/${name}.tar.gz";
-    sha256 = "1x9wnpzg7vxyjpnzab6vw0afbcijfbd57qrrkqrppynh0nyz54mp";
+    sha256 = "02v17za10mxnj095x4pvm80jxyqwk93kailfc2j8xa1r6crmnbm8";
   };
 
   outputs = [ "out" "dev" "info" "doc" ];
@@ -17,7 +17,7 @@ stdenv.mkDerivation rec {
     "--with-libiconv-prefix=${libiconv}"
   ];
 
-  doCheck = !stdenv.hostPlatform.isMusl;
+  doCheck = true;
 
   enableParallelBuilding = true;
 

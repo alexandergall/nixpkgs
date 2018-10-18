@@ -1,4 +1,4 @@
-{ lib, callPackage, fetchurl, fetchpatch }:
+{ lib, callPackage, fetchurl }:
 
 let
   generic = args: callPackage (import ./generic.nix args) { };
@@ -17,11 +17,11 @@ in
 rec {
   # Policy: use the highest stable version as the default (on our master).
   stable = generic {
-    version = "390.25";
-    sha256_32bit = "0fkbpx01l46pprrd4nlc2y6hfmkb55ddlwm1r84kr6j08qmmb0qi";
-    sha256_64bit = "0whsls1mm6vkll5qmxnyz8vjgspp1rmqpsampgi83k62n514c08r";
-    settingsSha256 = "1jhbr68z36s3fr9vx3ga2f6yrzlwpc0j5mw8h12g65p7wdsbk6y7";
-    persistencedSha256 = "033azbhi50f1b0lw759sncgf7ckh2m2c0khj5v15sch9kl1fzk8i";
+    version = "390.77";
+    sha256_32bit = "1yd313ghh2qbn07d5wbkshfwgkm4mh49vcqkydds3b3xk0mx4i8l";
+    sha256_64bit = "10kjccrkdn360035lh985cadhwy6lk9xrw3wlmww2wqfaa25f775";
+    settingsSha256 = "1wvxldpjkrx0ldjm5l6ycm6paxpcw89h0n6hfkznfkahkq7fwxdj";
+    persistencedSha256 = "1gklmc0v17m018cwpdlzwdyd45y4sjvjhj8a3l44baygix5zn30f";
   };
 
   beta = stable; # not enough interest to maintain beta ATM
@@ -46,12 +46,13 @@ rec {
     persistencedSha256 = null;
     useGLVND = false;
     useProfiles = false;
+    settings32Bit = true;
 
     prePatch = let
       debPatches = fetchurl {
         url = "mirror://debian/pool/non-free/n/nvidia-graphics-drivers-legacy-304xx/"
-            + "nvidia-graphics-drivers-legacy-304xx_304.135-2.debian.tar.xz";
-        sha256 = "0mhji0ssn7075q5a650idigs48kzf11pzj2ca2n07rwxg3vj6pdr";
+            + "nvidia-graphics-drivers-legacy-304xx_304.137-5.debian.tar.xz";
+        sha256 = "0n8512mfcnvklfbg8gv4lzbkm3z6nncwj6ix2b8ngdkmc04f3b6l";
       };
       prefix = "debian/module/debian/patches";
       applyPatches = pnames: if pnames == [] then null else
@@ -63,6 +64,4 @@ rec {
     in applyPatches [ "fix-typos" ];
     patches = maybePatch_drm_legacy;
   };
-
-  legacy_173 = callPackage ./legacy173.nix { };
 }

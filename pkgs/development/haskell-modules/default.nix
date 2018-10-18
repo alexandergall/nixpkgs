@@ -11,11 +11,11 @@
 let
 
   inherit (lib) extends makeExtensible;
-  inherit (haskellLib) overrideCabal makePackageSet;
+  inherit (haskellLib) makePackageSet;
 
   haskellPackages = pkgs.callPackage makePackageSet {
     package-set = initialPackages;
-    inherit stdenv haskellLib ghc buildHaskellPackages extensible-self;
+    inherit stdenv haskellLib ghc buildHaskellPackages extensible-self all-cabal-hashes;
   };
 
   commonConfiguration = configurationCommon { inherit pkgs haskellLib; };
