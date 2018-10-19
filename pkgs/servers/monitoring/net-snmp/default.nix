@@ -44,7 +44,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ autoreconfHook ];
   buildInputs = [ file perl unzip openssl ];
 
-  enableParallelBuilding = true;
+  enableParallelBuilding = false;
   doCheck = false; # fails
 
   postInstall = ''
