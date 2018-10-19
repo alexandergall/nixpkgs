@@ -1,5 +1,5 @@
 { stdenv, fetchFromGitHub, autoconf, autoconf-archive, automake,
-  libtool, pam, openssl, pam_tacplus_map }:
+  libtool, pam, openssl, pam_tacplus_map, file }:
 
 stdenv.mkDerivation rec {
   name = "pam_tacplus";
@@ -11,9 +11,16 @@ stdenv.mkDerivation rec {
     sha256 = "0xbpqxkr16bczyc2cjinvqqs8w7m2yckn0kjnxx276pcb8p1yb5d";
   };
 
-  buildInputs = [ pam_tacplus_map autoconf autoconf-archive automake libtool pam openssl ];
+  patches = [ ./pam_tacplus.patch ];
 
-  preConfigure = "./auto.sh";
+  buildInputs = [ pam_tacplus_map autoconf autoconf-archive automake libtool pam openssl file];
+
+  preConfigure =
+    ''
+      ./auto.sh
+      substituteInPlace configure --replace \
+        '/usr/bin/file' ${file}/bin/file;
+    '';
 
   configureFlags = [ "--oldincludedir=\${out}/include" "--with-openssl=${openssl.dev}" ];
 }
