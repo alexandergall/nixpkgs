@@ -1,5 +1,6 @@
 { config, ... }:
 
 {
-  imports = [ ./advantech ];
+  imports = [ ./advantech
+              ./supermicro ];
 }
