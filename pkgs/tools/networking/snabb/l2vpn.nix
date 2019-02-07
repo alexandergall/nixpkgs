@@ -7,16 +7,17 @@ with pkgs;
 ## To get the hash use:
 ##   nix-prefetch-url --unpack --name snabb-${version} \
 ##      https://github.com/snabbco/snabb/archive/${version}.tar.gz
-snabb.overrideDerivation (origAttrs: rec {
+snabb.overrideAttrs (origAttrs: rec {
   name = "snabb-${version}";
-  version = "l2vpn-v10";
+  version = "l2vpn-v11";
 
   src = fetchFromGitHub {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "0i1m6nrb5pb8rh4i6p5xazbrnajpr8mhq600gh6pkiv58avnrvbh";
+    sha256 = "1v0jb1pmhkpvvdzsirzvbc5rvnxcm9qnljja9g2jk6nkq0w8s74v";
   };
+  makeFlags = [ "XCFLAGS=-DLUAJIT_USE_PERFTOOLS" ];
   buildInputs = origAttrs.buildInputs ++ [ git ];
   PREFIX = "./";
- })
+})

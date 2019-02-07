@@ -41,26 +41,6 @@ with lib;
         '';
       };
     };
-    config.${gre} = {
-      key = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        example = literalExample ''0x12345678'';
-        description = ''
-          An optional 32-bit value which is included in the "key" field
-          of the GRE header.  If set to null, the key field is not
-          included in the header.  If used, both sides of the tunnel must
-          use the same value.
-        '';
-      };
-      checksum = mkOption {
-        type = types.bool;
-        default = false;
-        example = literalExample ''true'';
-        description = ''
-          If true, checksumming is enabled for the GRE tunnel.
-        '';
-      };
-    };
+    config.${gre} = {};
   };
 }

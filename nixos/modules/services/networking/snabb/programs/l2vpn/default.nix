@@ -126,25 +126,6 @@ in
                       in the pseudowire being disabled.
                     '';
                   };
-                  vcID = mkOption {
-                    type = types.int;
-                    default = 1;
-                    description = ''
-                      The VC ID assigned to this VPLS instance.  It is
-                      advertised through the control channel (and required to
-                      be identical on both sides of a pseudowire) but not used
-                      for multiplexing/demultiplexing of VPN traffic.
-                    '';
-                  };
-                  address = mkOption {
-                    type = types.str;
-                    default = null;
-                    example = "2001:DB8:0:1::1";
-                    description = ''
-                      The IPv6 address which uniquely identifies the VPLS
-                      instance.
-                    '';
-                  };
                   defaultTunnel = mkOption (tunnelOption {
                     description = ''
                       The default tunnel configuration for pseudowires.  This
@@ -197,12 +178,41 @@ in
                   pseudowires = mkOption {
                     type = types.attrsOf (types.submodule {
                       options = {
-                        address = mkOption {
+                        addressFamily = mkOption {
+                          type = types.enum [ "ipv4" "ipv6" ];
+                          default = "ipv6";
+                          description = ''
+                            The address family to use for this pseudowire.  The
+                            uplink assigned to the VPLS instance must be
+                            configured as a L3 interface for the same address
+                            family.
+                          '';
+                        };
+                        localAddress = mkOption {
                           type = types.str;
                           default = null;
                           example = "2001:DB8:0:1::1";
                           description = ''
-                            The IPv6 address of the remote end of the tunnel.
+                            The address of the local tunnel endpoint within the
+                            specified address family.
+                          '';
+                        };
+                        remoteAddress = mkOption {
+                          type = types.str;
+                          default = null;
+                          example = "2001:DB8:0:1::1";
+                          description = ''
+                            The address of the remote tunnel endpoint within the
+                            specified address family.
+                          '';
+                        };
+                        vcID = mkOption {
+                          type = types.int;
+                          default = 1;
+                          description = ''
+                            The VC ID assigned to the pseudowire.  The 3-tuple
+                            consisting of localAddress, remoteAddrerss and vcID
+                            must be unique in this instance of the L2VPN program.
                           '';
                         };
                         tunnel = mkOption (tunnelOption
@@ -285,7 +295,7 @@ in
 
       acConfig = name: ac: ignore:
         ''
-          ${name} = "${ac}",
+          ${name} = { interface = "${ac}" },
         '';
 
       tunnelConfig = tunnel:
@@ -293,39 +303,34 @@ in
           tunnel = {
         '' +
         (indentBlock 2
-        (if tunnel.type == "l2tpv3" then
-           let conf = tunnel.config.l2tpv3; in
-           ''
-             type = "l2tpv3",
-             local_cookie = "${conf.localCookie}",
-             remote_cookie = "${conf.remoteCookie}"
-           ''
+          (if tunnel.type == "l2tpv3" then
+            let conf = tunnel.config.l2tpv3; in
+             ''
+               type = "l2tpv3",
+               config = {
+                 local_cookie = "${conf.localCookie}",
+                 remote_cookie = "${conf.remoteCookie}"
+               }''
          else # type "gre"
-           let conf = tunnel.config.gre; in
            ''
-             type = "gre",
-           '' +
-           optionalString (conf.key != null)
-             (''key = ${conf.key},'' + "\n") +
-           ''
-             checksum = ${boolToString conf.checksum},
-           '')) +
+             type = "gre"'')) + "\n" +
         ''
-          }, -- tunnel
-        '';
+          }, -- tunnel'';
 
       ccConfig = cc:
         ''
           cc = {
             heartbeat = ${toString cc.heartbeat},
             dead_factor = ${toString cc.deadFactor}
-          }, -- cc
-        '';
+          }, -- cc'';
 
       pwConfig = name: pw: ignore:
         ''
           ${name} = {
-            address = "${pw.address}",
+            afi = "${pw.addressFamily}",
+            local_address = "${pw.localAddress}",
+            remote_address = "${pw.remoteAddress}",
+            vc_id = ${toString pw.vcID},
         '' +
         optionalString (pw.tunnel != null)
                        (indentBlock 2
@@ -355,8 +360,6 @@ in
             description = "${vpls.description}",
             uplink = "${vpls.uplink}",
             mtu = ${toString vpls.mtu},
-            vc_id = ${toString vpls.vcID},
-            address = "${vpls.address}",
             bridge = {
               type = "${vpls.bridge.type}",
         '' +
@@ -370,55 +373,53 @@ in
                 verbose = ${boolToString mac.verbose},
                 timeout = ${toString mac.timeout}
               },
-            },
-          '')
+            },'') + "\n"
         else
           "") +
         (indentBlock 2
         ''
-          }, --bridge
-        '') +
-        (indentBlock 2 (tunnelConfig vpls.defaultTunnel)) +
+          }, --bridge'') + "\n" +
+        (indentBlock 2 (tunnelConfig vpls.defaultTunnel)) + "\n" +
         (optionalString vpls.defaultControlChannel.enable
-                        (indentBlock 2 (ccConfig vpls.defaultControlChannel))) +
+                        (indentBlock 2 (ccConfig vpls.defaultControlChannel)) + "\n") +
         (indentBlock 2
         ''
-          ac = {
-        '') +
+          ac = {'') + "\n" +
         (indentBlock 4
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
+         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) + "\n" +
         (indentBlock 2
         ''
           },
-          pw = {
-        '') +
-        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls null)) +
+          pw = {'') + "\n" +
+        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls null)) + "\n" +
         ''
             }, -- pw
           }, -- vpls ${name}
         '';
 
+      addressFamilyConfig = afi: afis:
+        if hasAttr afi afis then
+          let
+            afiConfig = afis.${afi};
+          in (indentBlock 2
+            ''
+              ${afi} = {
+                address = "${afiConfig.address}",
+                next_hop = "${afiConfig.nextHop}",'') + "\n" +
+             optionalString (afiConfig.nextHopMacAddress != null)
+               (indentBlock 4
+                ''next_hop_mac = "${afiConfig.nextHopMacAddress}",'' + "\n") +
+             (indentBlock 2
+             ''
+               },'' + "\n")
+          else
+            "";
+
       addressFamiliesConfig = conf:
         ''
           afs = {
-        '' +
-        (if hasAttr "ipv6" conf.addressFamilies then
-            let ipv6 = conf.addressFamilies.ipv6; in
-            (indentBlock 2
-             ''
-               ipv6 = {
-                 address = "${ipv6.address}",
-                 next_hop = "${ipv6.nextHop}",
-             '') +
-             optionalString (ipv6.nextHopMacAddress != null)
-               (indentBlock 4
-                ''next_hop_mac = "${ipv6.nextHopMacAddress}",'' + "\n") +
-             (indentBlock 2
-             ''
-               },
-             '')
-          else
-            "") +
+        '' + concatStringsSep "\n" (map (afi: addressFamilyConfig afi conf.addressFamilies) [ "ipv4" "ipv6" ])
+        +
         ''}, -- afs'';
 
       vlansConfig = conf: intf:
@@ -426,16 +427,16 @@ in
           {
             description = "${conf.description}",
             vid = ${toString conf.vid},
-            ${if conf.mtu != null then
-                if conf.mtu <= intf.mtu then
-                  "mtu = ${toString conf.mtu},"
-                else
-                  throw ("MTU ${toString conf.mtu} of subinterface "
-                    + "${subIntfName intf conf.vid} exceeds MTU "
-                    + "${toString intf.mtu} of interface ${intf.name}")
-              else
-                ""}
         '' +
+        (if conf.mtu != null then
+          if conf.mtu <= intf.mtu then
+            "  mtu = ${toString conf.mtu},\n"
+          else
+            throw ("MTU ${toString conf.mtu} of subinterface "
+                   + "${subIntfName intf conf.vid} exceeds MTU "
+                   + "${toString intf.mtu} of interface ${intf.name}")
+        else
+          "") +
         optionalString (conf.addressFamilies != null)
           (indentBlock 2 ''${addressFamiliesConfig conf}'' + "\n") +
         ''
@@ -481,24 +482,21 @@ in
                    ''
                      config = {
                        pciaddr = "${nicConfig.pciAddress}",
-                     },
-                   '') + optionalString (driver.extraConfig != null)
-                   (indentBlock 4
+                     },'') + "\n" +
+                  optionalString (driver.extraConfig != null)
+                  (indentBlock 4
                     ''
-                      extra_config = ${driver.extraConfig},
-                    '')
+                      extra_config = ${driver.extraConfig},'') + "\n"
                 else
                   throw "missing PCI address for interface ${intf.name}"
               else
                 (indentBlock 4
                  ''
-                   config = ${driver.literalConfig},
-                 '')) +
+                   config = ${driver.literalConfig},'') + "\n") +
              (indentBlock 2 
               ''
                 },
-                mtu = ${toString intf.mtu},
-              '') +
+                mtu = ${toString intf.mtu},'') + "\n" +
              optionalString (intf.mirror != null)
                (indentBlock 2
                ''
@@ -506,8 +504,7 @@ in
                    rx = ${boolToString intf.mirror.rx},
                    tx = ${boolToString intf.mirror.tx},
                    type = "${intf.mirror.type}",
-                 },
-               '') +
+                 },'' + "\n") +
              optionalString (intf.addressFamilies != null)
                (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
              (indentBlock 2
@@ -520,10 +517,9 @@ in
                      ''"${enc}"''
                    else
                      enc},
-                 vlans = {
-             '') +
+                 vlans = {'') + "\n" +
              ((indentBlock 6 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk intf))) +
+                                                intf.trunk intf)) + "\n") +
              ''
                    }, -- vlans
                  }, -- trunk
@@ -544,16 +540,14 @@ in
             (indentBlock 2 ''shmem_dir = "${cfg-snabb.shmemDir}",'' + "\n") +
           optionalString (cfg-snabb.snmp.enable)
             (indentBlock 2
-            ''
-              snmp = {
-                enable = true,
-                interval = ${toString cfg-snabb.snmp.interval},
-              },
-            '') +
+              ''
+                snmp = {
+                  enable = true,
+                  interval = ${toString cfg-snabb.snmp.interval},
+                },'' + "\n") +
           (indentBlock 2
-          ''
-              interfaces = {
-          '') +
+            ''
+              interfaces = {'') + "\n" +
           (let
             ## Select the interfaces referred to by uplinks and acs
             baseInterface = intf:
@@ -573,9 +567,8 @@ in
           (indentBlock 2
           ''
             }, -- interfaces
-            vpls = {
-          '') +
-          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config null)) +
+            vpls = {'') + "\n" +
+          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config null)) + "\n" +
           ''
               } -- vpls
             }
@@ -611,20 +604,24 @@ in
       }
     ];
 
-    ## Generate the list of IPv6 addresses and associated next-hops
+    ## Generate the list of IP addresses and associated next-hops
     ## that need to be announced as static routes through BGP.  There
     ## is no point in making these advertisements dynamic,
     ## e.g. withdraw them when the VPN service is down, since there is
     ## nowhere else these packets could go.
     services.exabgp.staticRoutes = mkIf cfg-exabgp.enable (let
-      nextHopFromIfConfig = ifSpec:
+      nextHopFromIfConfig = ifSpec: afi:
         let
           intfs = cfg-snabb.interfaces;
           parts = splitString "." ifSpec;
           nParts = (count (x: true) parts);
-          getAddress = intf:
+          getAddress = intf: afi:
             if hasAttr "addressFamilies" intf then
-              intf.addressFamilies.ipv6.address
+              if hasAttr afi intf.addressFamilies then
+                intf.addressFamilies.${afi}.address
+              else
+                throw ("address family ${afi} not enabled "
+                       + "on interface ${ifSpec}")
             else
               throw ("interface ${ifSpec} is L2 when L3 "
                      + "was expected");
@@ -638,7 +635,7 @@ in
             in
               if intf != null then
                 if nParts == 1 then
-                  getAddress intf
+                  getAddress intf afi
                 else
                   let
                     vid = elemAt parts 1;
@@ -647,7 +644,7 @@ in
                                       null null trunk.vlans;
                   in
                     if vlan != null then
-                      getAddress vlan
+                      getAddress vlan afi
                     else
                       throw ("sub-interface ${vid} of "
                              + "${name} does not exist")
@@ -657,16 +654,25 @@ in
             throw "illegal interface specifier ${ifSpec}"
       ;
 
-      mkRoute = vpls:
-        { route = "${vpls.address}/128";
-          nextHop = nextHopFromIfConfig vpls.uplink; };
+      mkRoute = vpls: pw:
+        let
+          addrBits = {
+            ipv4 = 32;
+            ipv6 = 128;
+          };
+        in { route = "${pw.localAddress}/${toString addrBits.${pw.addressFamily}}";
+             nextHop = nextHopFromIfConfig vpls.uplink pw.addressFamily; };
 
-      mkRoutes = instance:
-        map (vpls: mkRoute vpls) (mapAttrsToList (name: value: value)
-                                                 instance.vpls);
+      mkRoutesForVpls = vpls:
+        map (pw: mkRoute vpls pw) (mapAttrsToList (name: value: value)
+                                              vpls.pseudowires);
 
-    in flatten (map mkRoutes (mapAttrsToList (name: value: value)
-                                             cfg.instances)));
+      mkRoutesForInstance = instance:
+        map (vpls: mkRoutesForVpls vpls) (mapAttrsToList (name: value: value)
+                                                         instance.vpls);
+
+    in flatten (map mkRoutesForInstance (mapAttrsToList (name: value: value)
+                                                         cfg.instances)));
 
   }; # config
 }

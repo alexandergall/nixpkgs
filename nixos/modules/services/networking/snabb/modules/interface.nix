@@ -25,7 +25,6 @@ let
                     type = types.str;
                     description = ''
                       The IPv6 address assigned to the interface.
-                      A netmask of /64 is implied.
                     '';
                   };
                   nextHop = mkOption {
@@ -33,8 +32,8 @@ let
                     description = ''
                       The IPv6 address used as next-hop for all
                       packets sent outbound on the interface.
-                      It must be part of the same subnet as the
-                      local address.
+                      It is assumed to be reachable directly through
+                      the interface.
                     '';
                   };
                   nextHopMacAddress = mkOption {
@@ -51,6 +50,51 @@ let
                 };
               });
             }; # ipv6
+            ipv4 = mkOption {
+              default = null;
+              example = literalExample
+                ''
+                  {
+                    ipv4 = {
+                      address = "192.168.0.2";
+                      nextHop = "192.168.0.1";
+                    };
+                  }
+                '';
+              description = ''
+                An optional IPv4 configuration of the subinterface.
+              '';
+              type = types.nullOr (types.submodule {
+                options = {
+                  address = mkOption {
+                    type = types.str;
+                    description = ''
+                      The IPv4 address assigned to the interface.
+                    '';
+                  };
+                  nextHop = mkOption {
+                    type = types.str;
+                    description = ''
+                      The IPv4 address used as next-hop for all
+                      packets sent outbound on the interface.
+                      It is assumed to be reachable directly through
+                      the interface.
+                    '';
+                  };
+                  nextHopMacAddress = mkOption {
+                    type = types.nullOr types.str;
+                    default = null;
+                    description = ''
+                      The optional MAC address that belongs to the
+                      <option>nextHop</option> address.  Setting
+                      this option disables dynamic neighbor
+                      discovery for the nextHop address on the
+                      interface.
+                    '';
+                  };
+                };
+              });
+            }; # ipv4
           };
         };
 in
@@ -163,8 +207,7 @@ in
       description = ''
         An optional set of address family configurations.  Providing
         this option designates the physical interface as a L3 interface.
-        Currently, only ipv6 is supported.  This option is only allowed
-        if trunking is disabled.
+        This option is only allowed if trunking is disabled.
       '';
       type = types.nullOr addressFamiliesModule;
     };
@@ -245,7 +288,6 @@ in
               description = ''
                 An optional set of address family configurations.  Providing
                 this option designates the sub-interface as a L3 interface.
-                Currently, only ipv6 is supported.
               '';
               type = types.nullOr addressFamiliesModule;
             };
