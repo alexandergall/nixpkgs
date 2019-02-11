@@ -398,7 +398,7 @@ in
         '';
 
       addressFamilyConfig = afi: afis:
-        if hasAttr afi afis then
+        if afis.${afi} != null then
           let
             afiConfig = afis.${afi};
           in (indentBlock 2
