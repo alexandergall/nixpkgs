@@ -55,6 +55,92 @@ in
               '';
             };
 
+            luajitWorker = {
+              options = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                description = ''
+                  A list of LuaJIT runtime options passed to Snabb worker
+                  processes (<option>programOptions</option> apply to the
+                  supervisor process only).
+                '';
+              };
+              dump = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Whether to enable the JIT dump facility.
+                  '';
+                };
+                option = mkOption {
+                  type = types.str;
+                  default = "";
+                  example = "+rs";
+                  description = ''
+                    The configuration option for the JIT dump facility.
+                  '';
+                };
+                file = mkOption {
+                  type = types.str;
+                  default = "/tmp/dump-%p";
+                  description = ''
+                    The full path name of the file to write the dump to.
+                    The string "%p" will be replaced with the ID of the
+                    worker process.
+                  '';
+                };
+              };
+            };
+
+            ipsec = mkOption {
+              type = types.attrsOf (types.submodule {
+                options = {
+                  encryptionAlgorithm = mkOption {
+                    type = types.enum [ "aes-gcm-16-icv" ];
+                    default = "aes-gcm-16-icv";
+                    description = ''
+                      The encyption algorithm to use on the selected traffic.
+                    '';
+                  };
+                  trafficSelectors = {
+                    addressFamily = mkOption {
+                      type = types.enum [ "ipv4" "ipv6" ];
+                      default = "ipv6";
+                      description = ''
+                        The address family to use for this selector.
+                      '';
+                    };
+                    localAddress = mkOption {
+                      type = types.str;
+                      default = null;
+                      example = "2001:DB8:0:1::1";
+                      description = ''
+                        The address of the local tunnel endpoint within the
+                        specified address family.
+                      '';
+                    };
+                    remoteAddress = mkOption {
+                      type = types.str;
+                      default = null;
+                      example = "2001:DB8:0:1::1";
+                      description = ''
+                        The address of the remote tunnel endpoint within the
+                        specified address family.
+                      '';
+                    };
+                  };
+                };
+              });
+              default = {};
+              description = ''
+                A set of IPsec policies consisting of an encryption
+                algorithm and a traffic selector that must match the
+                local and remote endpoint addresses of the pseudowires
+                that should be protected.
+              '';
+            };
+
             vpls = let
               tunnelOption = { maybeNull ? false,
                                default ? { type = "l2tpv3"; },
@@ -284,10 +370,15 @@ in
       indentBlock = count:
         let
           spaces = concatStrings (genList (i: " ") count);
+          maybePrepend = spaces: line:
+            if line != "" then
+              concatStrings [ spaces line ]
+            else
+              line;
         in text:
           let
             lines = splitString "\n" text;
-          in concatStringsSep "\n" (map (line: concatStrings [ spaces line ])
+          in concatStringsSep "\n" (map (line: maybePrepend spaces line)
                                         lines);
 
       subIntfName = intf: vid:
@@ -295,55 +386,66 @@ in
 
       acConfig = name: ac: ignore:
         ''
-          ${name} = { interface = "${ac}" },
+          attachment-circuit {
+            name "${name}";
+            interface "${ac}";
+          }
         '';
 
       tunnelConfig = tunnel:
         ''
-          tunnel = {
+          tunnel {
         '' +
         (indentBlock 2
           (if tunnel.type == "l2tpv3" then
             let conf = tunnel.config.l2tpv3; in
              ''
-               type = "l2tpv3",
-               config = {
-                 local_cookie = "${conf.localCookie}",
-                 remote_cookie = "${conf.remoteCookie}"
-               }''
+               l2tpv3 {
+                 local-cookie "${conf.localCookie}";
+                 remote-cookie "${conf.remoteCookie}";
+               }
+             ''
          else # type "gre"
            ''
-             type = "gre"'')) + "\n" +
+             gre {}
+           '')) +
         ''
-          }, -- tunnel'';
+          }
+      '';
 
       ccConfig = cc:
         ''
-          cc = {
-            heartbeat = ${toString cc.heartbeat},
-            dead_factor = ${toString cc.deadFactor}
-          }, -- cc'';
+          control-channel {
+            heartbeat ${toString cc.heartbeat};
+            dead-factor ${toString cc.deadFactor};
+          }
+        '';
 
-      pwConfig = name: pw: ignore:
+      pwConfig = name: pw: vpls:
         ''
-          ${name} = {
-            afi = "${pw.addressFamily}",
-            local_address = "${pw.localAddress}",
-            remote_address = "${pw.remoteAddress}",
-            vc_id = ${toString pw.vcID},
+          pseudowire {
+            name "${name}";
+            vc-id ${toString pw.vcID};
+            transport {
+              ${pw.addressFamily} {
+                local-address "${pw.localAddress}";
+                remote-address "${pw.remoteAddress}";
+              }
+            }
         '' +
-        optionalString (pw.tunnel != null)
-                       (indentBlock 2
-                        (tunnelConfig pw.tunnel)) +
-        (let cc = pw.controlChannel; in
-         optionalString (cc != null)
-           (indentBlock 2 (ccConfig (pw.controlChannel //
-                          (if cc.enable then
-                             {}
-                           else
-                             { heartbeat = 0; }))))) +
+        (indentBlock 2
+           (if pw.tunnel != null then
+              (tunnelConfig pw.tunnel)
+           else
+              (tunnelConfig vpls.defaultTunnel))) +
+        (indentBlock 2
+           (let cc = if pw.controlChannel != null then
+                        pw.controlChannel
+                     else
+                        vpls.defaultControlChannel; in
+            optionalString cc.enable (ccConfig cc))) +
         ''
-          },
+          }
         '';
 
       mkConfigIterator = attr: f:
@@ -356,45 +458,36 @@ in
 
       vplsConfig = name: vpls: ignore:
         ''
-          ${name} = {
-            description = "${vpls.description}",
-            uplink = "${vpls.uplink}",
-            mtu = ${toString vpls.mtu},
-            bridge = {
-              type = "${vpls.bridge.type}",
+          vpls {
+            name "${name}";
+            description "${vpls.description}";
+            uplink "${vpls.uplink}";
+            mtu ${toString vpls.mtu};
+            bridge {
+              ${vpls.bridge.type} {
         '' +
         (let bridge = vpls.bridge; in
         if bridge.type == "learning" then
           let mac = bridge.config.learning.macTable; in
           (indentBlock 4
           ''
-            config = {
-              mac_table = {
-                verbose = ${boolToString mac.verbose},
-                timeout = ${toString mac.timeout}
-              },
-            },'') + "\n"
+              mac-table {
+                verbose ${boolToString mac.verbose};
+                timeout ${toString mac.timeout};
+              }
+            }
+          '')
         else
-          "") +
+          "{}") +
         (indentBlock 2
         ''
-          }, --bridge'') + "\n" +
-        (indentBlock 2 (tunnelConfig vpls.defaultTunnel)) + "\n" +
-        (optionalString vpls.defaultControlChannel.enable
-                        (indentBlock 2 (ccConfig vpls.defaultControlChannel)) + "\n") +
+          }
+        '') +
         (indentBlock 2
+         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
+        (indentBlock 2 ((mkConfigIterator "pseudowires" pwConfig) vpls vpls)) +
         ''
-          ac = {'') + "\n" +
-        (indentBlock 4
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) + "\n" +
-        (indentBlock 2
-        ''
-          },
-          pw = {'') + "\n" +
-        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls null)) + "\n" +
-        ''
-            }, -- pw
-          }, -- vpls ${name}
+          } // vpls ${name}
         '';
 
       addressFamilyConfig = afi: afis:
@@ -403,34 +496,40 @@ in
             afiConfig = afis.${afi};
           in (indentBlock 2
             ''
-              ${afi} = {
-                address = "${afiConfig.address}",
-                next_hop = "${afiConfig.nextHop}",'') + "\n" +
+              ${afi} {
+                address "${afiConfig.address}";
+                next-hop "${afiConfig.nextHop}";
+            '') +
              optionalString (afiConfig.nextHopMacAddress != null)
                (indentBlock 4
-                ''next_hop_mac = "${afiConfig.nextHopMacAddress}",'' + "\n") +
+                ''
+                  next-hop-mac "${afiConfig.nextHopMacAddress}";
+                '') +
              (indentBlock 2
              ''
-               },'' + "\n")
+               }
+             '')
           else
             "";
 
       addressFamiliesConfig = conf:
         ''
-          afs = {
-        '' + concatStringsSep "\n" (map (afi: addressFamilyConfig afi conf.addressFamilies) [ "ipv4" "ipv6" ])
-        +
-        ''}, -- afs'';
+          address-families {
+        '' +
+        concatStrings (map (afi: addressFamilyConfig afi conf.addressFamilies) [ "ipv4" "ipv6" ]) +
+        ''
+          }
+        '';
 
       vlansConfig = conf: intf:
         ''
-          {
-            description = "${conf.description}",
-            vid = ${toString conf.vid},
+          vlan {
+            description "${conf.description}";
+            vid ${toString conf.vid};
         '' +
         (if conf.mtu != null then
           if conf.mtu <= intf.mtu then
-            "  mtu = ${toString conf.mtu},\n"
+            "  mtu ${toString conf.mtu};\n"
           else
             throw ("MTU ${toString conf.mtu} of subinterface "
                    + "${subIntfName intf conf.vid} exceeds MTU "
@@ -438,9 +537,9 @@ in
         else
           "") +
         optionalString (conf.addressFamilies != null)
-          (indentBlock 2 ''${addressFamiliesConfig conf}'' + "\n") +
+          (indentBlock 2 ''${addressFamiliesConfig conf}'') +
         ''
-          }, -- vlan
+          }
         '';
 
       interfaceConfig = intf: ignore:
@@ -468,62 +567,57 @@ in
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
              ''
-               {
-                 name = "${intf.name}",
+               interface {
+                 name "${intf.name}";
                  ${optionalString (intf.description != null)
-                     ''description = "${intf.description}",''}
-                 driver = {
-                   path = "${driver.path}",
-                   name = "${driver.name}",
+                     ''description "${intf.description}";''}
+                 driver {
+                   path "${driver.path}";
+                   name "${driver.name}";
              '' +
              (if driver.literalConfig == null then
                 if nicConfig.pciAddress != null then
                   (indentBlock 4
                    ''
-                     config = {
-                       pciaddr = "${nicConfig.pciAddress}",
-                     },'') + "\n" +
+                     config "{
+                       pciaddr = '${nicConfig.pciAddress}',
+                     }";'') + "\n" +
                   optionalString (driver.extraConfig != null)
                   (indentBlock 4
                     ''
-                      extra_config = ${driver.extraConfig},'') + "\n"
+                      extra-config "${driver.extraConfig}";'') + "\n"
                 else
                   throw "missing PCI address for interface ${intf.name}"
               else
                 (indentBlock 4
                  ''
-                   config = ${driver.literalConfig},'') + "\n") +
+                   config "${driver.literalConfig}";'') + "\n") +
              (indentBlock 2 
               ''
-                },
-                mtu = ${toString intf.mtu},'') + "\n" +
+                }
+                mtu ${toString intf.mtu};'') + "\n" +
              optionalString (intf.mirror != null)
                (indentBlock 2
                ''
-                 mirror = {
-                   rx = ${boolToString intf.mirror.rx},
-                   tx = ${boolToString intf.mirror.tx},
-                   type = "${intf.mirror.type}",
-                 },'' + "\n") +
+                 mirror {
+                   rx ${boolToString intf.mirror.rx};
+                   tx ${boolToString intf.mirror.tx};
+                   type "${intf.mirror.type}";
+                 }
+               '') + ## TODO: name
              optionalString (intf.addressFamilies != null)
-               (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
+               (indentBlock 2 ''${addressFamiliesConfig intf}'') +
              (indentBlock 2
              ''
-               trunk = {
-                 enable = ${boolToString intf.trunk.enable},
-                 encapsulation = ${
-                   let enc = intf.trunk.encapsulation; in
-                   if (enc == "dot1q" || enc == "dot1ad") then
-                     ''"${enc}"''
-                   else
-                     enc},
-                 vlans = {'') + "\n" +
-             ((indentBlock 6 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk intf)) + "\n") +
+               trunk {
+                 enable ${boolToString intf.trunk.enable};
+                 encapsulation ${intf.trunk.encapsulation};
+             '') +
+             ((indentBlock 4 ((mkConfigIterator "vlans" vlansConfig)
+                                                intf.trunk intf))) +
              ''
-                   }, -- vlans
-                 }, -- trunk
-               }, -- interface ${intf.name}
+                 }
+               } // interface ${intf.name}
              ''
            else
              throw ("L2VPN: the interface named ${intf.name} is not"
@@ -534,20 +628,34 @@ in
           uplink = config.uplink;
         in pkgs.writeText "l2vpn-${name}"
          (''
-            return {
+            l2vpn-config {
           '' +
-          optionalString (cfg-snabb.shmemDir != null)
-            (indentBlock 2 ''shmem_dir = "${cfg-snabb.shmemDir}",'' + "\n") +
-          optionalString (cfg-snabb.snmp.enable)
-            (indentBlock 2
-              ''
-                snmp = {
-                  enable = true,
-                  interval = ${toString cfg-snabb.snmp.interval},
-                },'' + "\n") +
           (indentBlock 2
             ''
-              interfaces = {'') + "\n" +
+              snmp {
+                enable ${boolToString cfg-snabb.snmp.enable};
+                interval ${toString cfg-snabb.snmp.interval};
+              }
+            '') +
+          (indentBlock 2
+            ''
+              luajit {
+            '') +
+          (indentBlock 4
+            (concatStrings (map (opt: ''option "${opt}";'' + "\n") config.luajitWorker.options))) +
+          (indentBlock 4
+            (let dump = config.luajitWorker.dump; in
+            ''
+              dump {
+                enable ${boolToString dump.enable};
+                option "${dump.option}";
+                file "${dump.file}";
+              }
+            '')) +
+          (indentBlock 2
+            ''
+              }
+            '') +
           (let
             ## Select the interfaces referred to by uplinks and acs
             baseInterface = intf:
@@ -562,15 +670,10 @@ in
                                               refInterfaces)) cfg-snabb.interfaces).right;
             };
           in
-          (indentBlock 4 ((mkConfigIterator "interfaces" interfaceConfig)
+          (indentBlock 2 ((mkConfigIterator "interfaces" interfaceConfig)
                                             ourInterfaces null))) +
-          (indentBlock 2
+          (indentBlock 2 ((mkConfigIterator "vpls" vplsConfig) config null)) +
           ''
-            }, -- interfaces
-            vpls = {'') + "\n" +
-          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config null)) + "\n" +
-          ''
-              } -- vpls
             }
           '');
 

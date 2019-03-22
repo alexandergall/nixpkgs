@@ -67,8 +67,7 @@ in
       ## FIXME: do we need this?
       stateDir = mkOption {
         type = types.str;
-        default = "/var/lib/snabb";
-        example = literalExample ''"/var/lib/snabb"'';
+        default = "/var/run/snabb";
         description = ''
           Path to a directory where Snabb processes can store persistent state.
         '';
@@ -78,11 +77,10 @@ in
       ## to the new-style core/shm framework.
       shmemDir = mkOption {
         type = types.str;
-        default = "/var/lib/snabb/shmem";
-        example = literalExample ''"/var/run/snabb"'';
+        default = "/var/run/snabb/snmp";
         description = ''
           Path to a directory where Snabb processes create shared memory
-          segments.  This is used by the legacy lib/ipc/shmem mechanism.
+          segments for SNMP.  This is used by the legacy lib/ipc/shmem mechanism.
         '';
       };
 
