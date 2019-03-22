@@ -16,6 +16,34 @@
 ###
 ### This is a first shot at how this could be done.  Comments are
 ### very welcome :)
+###
+### Handling of programs that use ptree:
+###
+### The goal is to allow reconfiguration without restaring a process.
+### Uses directory hierarchy in <stateDir>
+###
+###   instStateDir = <stateDir>/services/<program>/<instance>
+###
+### The service for an instance must not depend on anything in the Nix
+### store that changes when the configuration is updated.  The service
+### must assume that its configuration is located in <instStateDir>/config
+###
+### Helper service to manage ptree-based services.  A ptree service must
+### apply "Wants" and "After" to the helper.
+###
+###   * Depends on service configurations of all ptree services in the
+###     Nix store
+###   * Gets restarted whenever a configuration changes after
+###     a "nixos-rebuild"
+###   * One config file per service (too restrictive?)
+###
+### When the helper is started
+###
+###   * Store the updated config files in <instStateDir>/config
+###   * If a service is already running
+###      * Get the PID from <instStateDir>/master.pid
+###      * Execute "snabb config <PID> load <instStateDir>/config
+###
 
 { config, pkgs, lib, ... }:
 
@@ -64,7 +92,6 @@ in
         '';
       };
 
-      ## FIXME: do we need this?
       stateDir = mkOption {
         type = types.str;
         default = "/var/run/snabb";
@@ -73,8 +100,6 @@ in
         '';
       };
 
-      ## FIXME: this will probably go away once the Snabb MIB stuff is moved
-      ## to the new-style core/shm framework.
       shmemDir = mkOption {
         type = types.str;
         default = "/var/run/snabb/snmp";
@@ -267,11 +292,16 @@ in
       ##   enable
       ##     A boolean that indicates whether the systemd service should
       ##     actually be created or not
+      ##   usePtreeMaster
+      ##     Whether to use the ptree master service to reload a running
+      ##     instance
       ##   description
       ##     A string that will be used as description in the systemd
       ##     service definition
       ##   programName
       ##     The name of the Snabb program to run
+      ##   programInstanceName
+      ##     The name of the instance of the program
       ##   programOptions
       ##     A string of command-line options passed to the program
       ##     being run.  If the string is empty, the global option
@@ -280,6 +310,8 @@ in
       ##   programArgs
       ##     A string of command-line arguments passed to the program
       ##     being run
+      ##   programConfig
+      ##     Configuration file, used if usePtreeMaster is true
       instances = mkOption {
         type = types.listOf types.attrs;
         default = [];
@@ -294,77 +326,151 @@ in
 
   ###### implementation
 
-  config = mkIf cfg.enable {
-    systemd.services = let
-      mkService = let
-        snmpdService = optional snmpd-cfg.enable "snmpd.service ";
-      in instance:
-        nameValuePair
-          instance.name
-          { inherit (instance) description;
+  config =
+    let
+      enabledInstances = (partition (inst: inst.enable)
+                                    cfg.instances).right;
+    in mkIf cfg.enable {
+      systemd.services = let
+        mkService = let
+          snmpdService = optional snmpd-cfg.enable "snmpd.service ";
+        in instance:
+          let
+            ptreeMasterService = optional instance.usePtreeMaster "snabb-ptree-master.service";
+          in
+          nameValuePair
+            instance.name
+            { inherit (instance) description;
 
-            wantedBy = [ "multi-user.target" ];
-            requires = snmpdService;
-            before = snmpdService;
+              wantedBy = [ "multi-user.target" ];
+              wants = ptreeMasterService;
+              requires = snmpdService;
+              before = snmpdService;
+              after = ptreeMasterService;
 
-            preStart = ''
-              for d in ${cfg.stateDir} ${cfg.shmemDir}; do
-                [ -d $d ] || mkdir -p $d
-              done
-            '';
+              preStart = ''
+                for d in ${cfg.stateDir} ${cfg.shmemDir}; do
+                  [ -d $d ] || mkdir -p $d
+                done
+              '';
 
-            serviceConfig = {
-              ExecStart = "@${cfg.pkg}/bin/snabb snabb ${instance.programName}"
-                             + (if instance.programOptions != "" then
-                                   " ${instance.programOptions}"
-                                 else
-                                   " ${cfg.programOptions}")
-                             + " ${instance.programArgs}";
-              Type = "simple";
-              User = "root";
-              Group = "root";
+              serviceConfig = {
+                ExecStart = "@${cfg.pkg}/bin/snabb snabb ${instance.programName}"
+                               + (if instance.programOptions != "" then
+                                     " ${instance.programOptions}"
+                                   else
+                                     " ${cfg.programOptions}")
+                               + " ${instance.programArgs}";
+                Type = "simple";
+                User = "root";
+                Group = "root";
+              };
             };
+      in listToAttrs (map mkService enabledInstances) //
+
+      ## ptree Master Server
+      (let
+        ptreeMaster = pkgs.writeShellScriptBin "ptree-master"
+          (let
+            ptreeInstances = (partition (inst: inst.usePtreeMaster)
+                                        enabledInstances).right;
+            mkInstanceInfo = instance:
+              {
+                program = instance.programName;
+                name = instance.programInstanceName;
+                config = instance.programConfig;
+              };
+            instancesInfo = map mkInstanceInfo ptreeInstances;
+            mkServiceReload = info:
+              ''
+                doInstance ${info.program} ${info.name} ${info.config}
+              '';
+          in
+          ''
+            #!${pkgs.bash}
+
+            set -e
+            stateDir=${cfg.stateDir}
+
+            doInstance () {
+              prog=$1
+              name=$2
+              newConfig=$3
+
+              state=$stateDir/$prog/$name
+              test -d $state || mkdir -p $state
+              config=$state/config
+              if ! test -e $config; then
+                echo "Installing initial config for $prog/$name"
+                ln -s $newConfig $config
+              elif ! ${pkgs.diffutils}/bin/diff $config $newConfig >/dev/null; then
+                echo "Installing updated config for $prog/$name"
+                rm -f $config $config.o
+                ln -s $newConfig $config
+                if [ -e $state/master.pid ]; then
+                  pid=$(cat $state/master.pid)
+                  if kill -0 $pid 2>/dev/null; then
+                    echo "Reloading service"
+                    ${cfg.pkg}/bin/snabb config load $pid $config
+                  else
+                    rm -f $state/*.pid
+                  fi
+                fi
+              fi
+            }
+          '' + concatStrings (map mkServiceReload instancesInfo));
+      in {
+        snabb-ptree-master = {
+          description = "Snabb ptree master service";
+          wantedBy = [ "multi-user.target" ];
+
+          serviceConfig = {
+            ExecStart = "@${ptreeMaster}/bin/ptree-master ptree-master";
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            Group = "root";
           };
-    in listToAttrs (map mkService (partition (inst: inst.enable)
-                                             cfg.instances).right);
+        };
+      });
 
-    services.snmpd = mkIf snmpd-cfg.enable {
-      agentX = {
-        commonArgs = let
-          isUnique = l:
-            length l == length (unique l);
-          names = map (s: s.name) cfg.interfaces;
-          mkIfIndexTable = pkgs.writeText "snabb-ifindex"
-            ''${concatStringsSep "\n"
-                                 (imap (i: v: "${v} ${toString i}")
-                                       (names ++ cfg.subInterfaces))}'';
-        in
-          if isUnique names then
-            "--ifindex=${mkIfIndexTable}"
-          else
-            throw "names in services.snabb.interfaces are not unique";
+      services.snmpd = mkIf snmpd-cfg.enable {
+        agentX = {
+          commonArgs = let
+            isUnique = l:
+              length l == length (unique l);
+            names = map (s: s.name) cfg.interfaces;
+            mkIfIndexTable = pkgs.writeText "snabb-ifindex"
+              ''${concatStringsSep "\n"
+                                   (imap (i: v: "${v} ${toString i}")
+                                         (names ++ cfg.subInterfaces))}'';
+          in
+            if isUnique names then
+              "--ifindex=${mkIfIndexTable}"
+            else
+              throw "names in services.snabb.interfaces are not unique";
 
-        subagents = [
-          rec {
-            name = "interface";
-            executable = pkgs.snabbSNMPAgents + "/bin/${name}";
-            args = "--shmem-dir=${cfg.shmemDir}";
-            modulesInclude = [ "-ifTable" ];
-          }
-        ];
-      };
+          subagents = [
+            rec {
+              name = "interface";
+              executable = pkgs.snabbSNMPAgents + "/bin/${name}";
+              args = "--shmem-dir=${cfg.shmemDir}";
+              modulesInclude = [ "-ifTable" ];
+            }
+          ];
+        };
 
-      ## The Snabb SNMP sub-agent uses community "snabb" to read
-      ## sysUpTime in order to be independent of the "public" community.
-      views.sysUpTime = {
-        type = "included";
-        oid = ".1.3.6.1.2.1.1.3";
-      };
-      communities = {
-        ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
-        ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+        ## The Snabb SNMP sub-agent uses community "snabb" to read
+        ## sysUpTime in order to be independent of the "public" community.
+        views.sysUpTime = {
+          type = "included";
+          oid = ".1.3.6.1.2.1.1.3";
+        };
+        communities = {
+          ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
+          ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+        };
       };
     };
-  };
 
 }

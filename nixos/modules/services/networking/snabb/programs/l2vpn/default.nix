@@ -45,6 +45,16 @@ in
               '';
             };
 
+            usePtreeMaster = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Whether this instance should be controlled by the Snabb
+                ptree master service to allow dynamic reconfiguration
+                without restarting the instance service.
+              '';
+            };
+
             programOptions = mkOption {
               type = types.nullOr types.str;
               default = null;
@@ -677,14 +687,22 @@ in
             }
           '');
 
-      mkL2VPNService = name: config: {
-        name = "snabb-l2vpn-" + name;
-        inherit (config) enable;
+      mkL2VPNService = programInstanceName: config: rec {
+        name = "snabb-${programName}-${programInstanceName}";
+        inherit (config) enable usePtreeMaster;
+        inherit programInstanceName;
         description = "Snabb L2VPN termination point ${name}";
         programName = "l2vpn";
         programOptions = optionalString (config.programOptions != null)
                                         config.programOptions;
-        programArgs = "${instanceConfig name config}";
+        programConfig = instanceConfig name config;
+        programArgs = if config.usePtreeMaster then
+                         let
+                           instDir = cfg-snabb.stateDir + "/l2vpn/" + programInstanceName;
+                         in
+                           "${instDir}/config ${instDir}"
+                      else
+                        "${programConfig}";
       };
     in map (name: mkL2VPNService name cfg.instances.${name})
        (attrNames cfg.instances);
