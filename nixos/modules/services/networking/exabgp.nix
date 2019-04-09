@@ -6,48 +6,83 @@ let
   cfg = config.services.exabgp;
   stateDir = "/var/lib/exabgp";
   pidFile = "/var/run/exabgp.pid";
+  indentBlock = count:
+    let
+      spaces = concatStrings (genList (i: " ") count);
+      maybePrepend = spaces: line:
+        if line != "" then
+          concatStrings [ spaces line ]
+        else
+          line;
+    in text:
+      let
+        lines = splitString "\n" text;
+      in concatStringsSep "\n" (map (line: maybePrepend spaces line)
+                                    lines);
   mkFamily = conf:
-    concatStringsSep "\n" (map (x: "${x.afi} ${x.safi};") conf);
-
-  mkStatic = let
-    staticGroup = routes:
-      concatStringsSep "\n" (map (x: "route ${x.route} {\nnext-hop ${x.nextHop};\n}") routes);
-  in routes:
-    optionalString (length routes != 0 || length cfg.staticRoutes != 0)
-    ''static {
-      ${staticGroup cfg.staticRoutes}
-      ${staticGroup routes}
-      }'';
-
-  mkNeighbor = conf:
-    ''neighbor ${conf.remoteAddress} {
-        local-address ${conf.localAddress};
-        local-as ${toString conf.localAS};
-        peer-as ${toString conf.remoteAS};
-        group-updates false;
-        ${optionalString (conf.md5 != "") ''md5 "${conf.md5}";''}
-        ${optionalString (conf.extraConfig != "") conf.extraConfig}
-
-        family {
-          ${mkFamily conf.addressFamilies}
-        }
-
-        ${mkStatic conf.staticRoutes}
+    ''
+      family {
+    '' +
+    (indentBlock 2 (concatStringsSep "\n" (map (x: "${x.afi} ${x.safi};") conf)) + "\n") +
+    ''
       }
     '';
 
-  mkProcess = name: conf:
-    ''process ${name} {
-        run "${conf.run}";
-      }'';
+  mkStatic = let
+    mkRoute = route: nextHop:
+    ''
+      route ${route} {
+        next-hop ${nextHop};
+      }
+    '';
+    staticGroup = routes:
+      concatStrings (map (x: mkRoute x.route x.nextHop) routes);
+  in routes:
+    optionalString (length routes != 0 || length cfg.staticRoutes != 0)
+    ''
+      static {
+    '' +
+    (indentBlock 2 (staticGroup cfg.staticRoutes)) +
+    (indentBlock 2  (staticGroup routes)) +
+    ''
+      }
+    '';
 
-  exabgpIni = pkgs.writeText "exabgp-ini" ''
-    group default {
-      router-id ${cfg.routerID};
-      ${concatStringsSep "\n" (map mkNeighbor cfg.neighbors)}
-      ${concatStringsSep "\n" (map (name: mkProcess name cfg.processes.${name}) (attrNames cfg.processes))}
-    }
-  '';
+  mkNeighbor = conf:
+    indentBlock 2
+    (''
+       neighbor ${conf.remoteAddress} {
+         local-address ${conf.localAddress};
+         local-as ${toString conf.localAS};
+         peer-as ${toString conf.remoteAS};
+         group-updates false;
+         ${optionalString (conf.md5 != "") ''md5 "${conf.md5}";''}
+         ${optionalString (conf.extraConfig != "") conf.extraConfig}
+     '' +
+     (indentBlock 2 (mkFamily conf.addressFamilies)) +
+     (indentBlock 2 (mkStatic conf.staticRoutes)) +
+     ''
+       }
+     '');
+
+  mkProcess = name: conf:
+    indentBlock 2
+    ''
+      process ${name} {
+        run "${conf.run}";
+      }
+    '';
+
+  exabgpIni = pkgs.writeText "exabgp-ini"
+    (''
+      group default {
+        router-id ${cfg.routerID};
+    '' +
+    (concatStrings (map mkNeighbor cfg.neighbors)) +
+    (concatStrings (map (name: mkProcess name cfg.processes.${name}) (attrNames cfg.processes))) +
+    ''
+      }
+    '');
 
   exabgpEnv = let
     boolToString = value: if value then "true" else "false";
