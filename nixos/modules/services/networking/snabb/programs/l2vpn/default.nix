@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 
 with lib;
+with import ./lib.nix config;
 
 let
   cfg = config.services.snabb.programs.l2vpn;
@@ -9,7 +10,17 @@ let
   cfg-exabgp = config.services.exabgp;
   mkSubmodule = module:
     types.submodule (import module { inherit lib; });
+  addressFamilyList = [ "ipv4" "ipv6" ];
+  addressFamilyType = types.enum addressFamilyList;
 
+  ## Mapping of IKE ESP proposals to algorithm names
+  ## used by the Snabb ESP library.  There must be a
+  ## mapping for each element of the espProposal
+  ## config option.
+  encAlgFromEspProposal = proposal:
+    {
+      "aes128gcm128-x25519-esn" = "aes-gcm-16-icv";
+    }.${proposal};
 in
 {
   imports = [ ./devices ];
@@ -25,6 +36,148 @@ in
           If not specified, the global default options are applied.
         '';
       };
+
+      peers =
+        let
+          module = {
+            options = {
+              ike = {
+                address = mkOption {
+                  type = types.str;
+                  description = ''
+                    The local address used for communication with
+                    IKE peers.
+                  '';
+                };
+                preSharedKey = mkOption {
+                  type = types.str;
+                  description = '';
+                    The pre-shared key used to authenticate the peer.
+                  '';
+                };
+               rekeyTime = mkOption {
+                 type = types.string;
+                 default = "4h";
+                 description = ''
+                   Interval after which the IKE SA is re-keyed.
+                 '';
+                };
+                proposals = mkOption {
+                  type = types.listOf (types.enum [ "aes128-sha256-x25519-esn" ]);
+                  default = [ "aes128-sha256-x25519-esn" ];
+                  description = ''
+                    A list of IKE proposals.
+                  '';
+                };
+              };
+              endpoints = mkOption {
+                type = types.attrsOf (types.submodule {
+                  options = {
+                    addressFamily = mkOption {
+                      type = addressFamilyType;
+                      description = ''
+                        The address family of the endpoint.
+                      '';
+                    };
+                    address = mkOption {
+                      type = types.str;
+                      description = ''
+                        The address of the endpoint.
+                      '';
+                    };
+                  };
+                });
+                description = ''
+                  An attribute set of endpoints associated with the peer.
+                '';
+              };
+            };
+          };
+        in {
+          local = mkOption {
+            type = types.attrsOf (types.submodule module);
+            description = ''
+            '';
+          };
+          remote = mkOption {
+            type = types.attrsOf  (types.submodule module);
+            description = ''
+            '';
+          };
+        };
+
+      transports =
+        let
+          selectModule = {
+            options = {
+              peer = mkOption {
+                type = types.str;
+                description = ''
+                  The name of the peer from which to select the
+                  endpoint.
+                '';
+              };
+              endpoint = mkOption {
+                type = types.str;
+                description = ''
+                  The name of the endpoint to select from the peer.
+                '';
+              };
+            };
+          };
+        in mkOption {
+          type = types.attrsOf (types.submodule {
+            options = {
+              addressFamily = mkOption {
+                type = addressFamilyType;
+                description = ''
+                  The address family of the transport.  The
+                  selected endpoints must belong to this
+                  address family.
+                '';
+              };
+              local = mkOption {
+                type = types.submodule selectModule;
+                description = ''
+                  Selection of the local transport endpoint.
+                '';
+              };
+              remote = mkOption {
+                type = types.submodule selectModule;
+                description = ''
+                  Selection of the remote transport endpoint.
+                '';
+              };
+              ipsec = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Whether to enable IPsec for the transport.
+                  '';
+                };
+                espProposal = mkOption {
+                  type = types.enum [ "aes128gcm128-x25519-esn" ];
+                  default = "aes128gcm128-x25519-esn";
+                  description = ''
+                    A choice of a specific proposal for ESP.
+                  '';
+                };
+                rekeyTime = mkOption {
+                  type = types.str;
+                  default = "1h";
+                  description = ''
+                    Time interval after which the child SA created
+                    for this transport is re-keyed.
+                  '';
+                };
+              };
+            };
+          });
+          description = ''
+            An attribute set defining all transports known to the system.
+          '';
+        };
 
       instances = mkOption {
         default = {};
@@ -101,54 +254,6 @@ in
                   '';
                 };
               };
-            };
-
-            ipsec = mkOption {
-              type = types.attrsOf (types.submodule {
-                options = {
-                  encryptionAlgorithm = mkOption {
-                    type = types.enum [ "aes-gcm-16-icv" ];
-                    default = "aes-gcm-16-icv";
-                    description = ''
-                      The encyption algorithm to use on the selected traffic.
-                    '';
-                  };
-                  trafficSelectors = {
-                    addressFamily = mkOption {
-                      type = types.enum [ "ipv4" "ipv6" ];
-                      default = "ipv6";
-                      description = ''
-                        The address family to use for this selector.
-                      '';
-                    };
-                    localAddress = mkOption {
-                      type = types.str;
-                      default = null;
-                      example = "2001:DB8:0:1::1";
-                      description = ''
-                        The address of the local tunnel endpoint within the
-                        specified address family.
-                      '';
-                    };
-                    remoteAddress = mkOption {
-                      type = types.str;
-                      default = null;
-                      example = "2001:DB8:0:1::1";
-                      description = ''
-                        The address of the remote tunnel endpoint within the
-                        specified address family.
-                      '';
-                    };
-                  };
-                };
-              });
-              default = {};
-              description = ''
-                A set of IPsec policies consisting of an encryption
-                algorithm and a traffic selector that must match the
-                local and remote endpoint addresses of the pseudowires
-                that should be protected.
-              '';
             };
 
             vpls = let
@@ -275,7 +380,7 @@ in
                     type = types.attrsOf (types.submodule {
                       options = {
                         addressFamily = mkOption {
-                          type = types.enum [ "ipv4" "ipv6" ];
+                          type = addressFamilyType;
                           default = "ipv6";
                           description = ''
                             The address family to use for this pseudowire.  The
@@ -284,22 +389,11 @@ in
                             family.
                           '';
                         };
-                        localAddress = mkOption {
+                        transport = mkOption {
                           type = types.str;
                           default = null;
-                          example = "2001:DB8:0:1::1";
                           description = ''
-                            The address of the local tunnel endpoint within the
-                            specified address family.
-                          '';
-                        };
-                        remoteAddress = mkOption {
-                          type = types.str;
-                          default = null;
-                          example = "2001:DB8:0:1::1";
-                          description = ''
-                            The address of the remote tunnel endpoint within the
-                            specified address family.
+                            The name of the transport to use for this pseudowire.
                           '';
                         };
                         vcID = mkOption {
@@ -436,12 +530,7 @@ in
           pseudowire {
             name "${name}";
             vc-id ${toString pw.vcID};
-            transport {
-              ${pw.addressFamily} {
-                local-address "${pw.localAddress}";
-                remote-address "${pw.remoteAddress}";
-              }
-            }
+            transport "${pw.transport}";
         '' +
         (indentBlock 2
            (if pw.tunnel != null then
@@ -526,7 +615,7 @@ in
         ''
           address-families {
         '' +
-        concatStrings (map (afi: addressFamilyConfig afi conf.addressFamilies) [ "ipv4" "ipv6" ]) +
+        concatStrings (map (afi: addressFamilyConfig afi conf.addressFamilies) addressFamilyList) +
         ''
           }
         '';
@@ -633,6 +722,49 @@ in
              throw ("L2VPN: the interface named ${intf.name} is not"
                     + " declared in services.snabb.interfaces");
 
+      mkEndpoint = name: config: ignore:
+        ''
+          endpoint {
+            name "${name}";
+            address {
+              ${config.addressFamily} "${config.address}";
+            }
+          }
+        '';
+
+      mkPeers = name: config: type:
+        ''
+          ${type} {
+            name "${name}";
+        '' +
+        (indentBlock 2
+          ((mkConfigIterator "endpoints" mkEndpoint) config null)) +
+        ''
+          }
+        '';
+
+      mkTransport = name: config: ignore:
+        let
+          mkEp = type:
+          ''
+            ${type} {
+              peer "${config.${type}.peer}";
+              endpoint "${config.${type}.endpoint}";
+            }
+          '';
+        in ''
+          transport {
+            name "${name}";
+            address-family "${config.addressFamily}";
+            ipsec {
+              enable ${boolToString config.ipsec.enable};
+              encryption-algorithm "${encAlgFromEspProposal config.ipsec.espProposal}";
+            }
+        '' + (indentBlock 2 (mkEp "local")) + (indentBlock 2 (mkEp "remote")) +
+        ''
+          }
+        '';
+
       instanceConfig = name: config:
         let
           uplink = config.uplink;
@@ -682,6 +814,17 @@ in
           in
           (indentBlock 2 ((mkConfigIterator "interfaces" interfaceConfig)
                                             ourInterfaces null))) +
+          (indentBlock 2
+            ''
+              peers {
+            '') +
+          (indentBlock 4 ((mkConfigIterator "local" mkPeers) cfg.peers "local")) +
+          (indentBlock 4 ((mkConfigIterator "remote" mkPeers) cfg.peers "remote")) +
+          (indentBlock 2
+            ''
+              }
+            '') +
+          (indentBlock 2 ((mkConfigIterator "transports" mkTransport) cfg null)) +
           (indentBlock 2 ((mkConfigIterator "vpls" vplsConfig) config null)) +
           ''
             }
@@ -781,8 +924,9 @@ in
             ipv4 = 32;
             ipv6 = 128;
           };
-        in { route = "${pw.localAddress}/${toString addrBits.${pw.addressFamily}}";
-             nextHop = nextHopFromIfConfig vpls.uplink pw.addressFamily; };
+          addr = getLocalAddress pw.transport;
+        in { route = "${addr.address}/${toString addrBits.${addr.afi}}";
+             nextHop = nextHopFromIfConfig vpls.uplink addr.afi; };
 
       mkRoutesForVpls = vpls:
         map (pw: mkRoute vpls pw) (mapAttrsToList (name: value: value)

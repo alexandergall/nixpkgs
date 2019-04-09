@@ -328,8 +328,18 @@ in
 
   config =
     let
-      enabledInstances = (partition (inst: inst.enable)
-                                    cfg.instances).right;
+      l2vpnCfg = cfg.programs.l2vpn;
+      enabledInstances = filter (inst: inst.enable) cfg.instances;
+      l2vpnInstances = filter (inst: inst.programName == "l2vpn") enabledInstances;
+      ipsecEnabledTransports = filterAttrs (n: v: v.ipsec.enable) l2vpnCfg.transports;
+      ipsecPeersForInstance = inst:
+        let
+          transportsForPeer = peer:
+            filterAttrs (n: v: v.remote.peer == peer) ipsecEnabledTransports;
+          peers = unique (mapAttrsToList (n: v: v.remote.peer) ipsecEnabledTransports);
+        in listToAttrs (map (peer: nameValuePair peer (transportsForPeer peer)) peers);
+      ipsecPeers = fold (a: b: a // b) {} (map (inst: ipsecPeersForInstance inst) l2vpnInstances);
+      ipsecEnable = length (attrNames ipsecPeers) > 0;
     in mkIf cfg.enable {
       systemd.services = let
         mkService = let
@@ -362,6 +372,7 @@ in
                                      " ${cfg.programOptions}")
                                + " ${instance.programArgs}";
                 Type = "simple";
+                Restart = "always";
                 User = "root";
                 Group = "root";
               };
@@ -432,6 +443,116 @@ in
             Group = "root";
           };
         };
+      }) //
+
+      (if ipsecEnable then
+        (let
+          mkIPsecInitiator = child:
+            let
+              scriptName = "initiate-${child}";
+              initiateChild = pkgs.writeShellScriptBin scriptName
+              ''
+                ## Give the Snabb instances some time to set up the
+                ## SA files
+                sleep 5
+                ${pkgs.strongswan}/bin/swanctl --initiate --child ${child}
+              '';
+              l2vpnServices = map (inst: inst.name + ".service") l2vpnInstances;
+
+            in nameValuePair
+              child
+              { description = "IPsec initiator for child SA ${child}";
+
+                wantedBy = [ "multi-user.target" ];
+                wants = [ "strongswan-swanctl.service" ];
+                requires = [ "strongswan-swanctl.service" ] ++ l2vpnServices;
+                after = [ "strongswan-swanctl.service" ] ++ l2vpnServices;
+
+                serviceConfig = {
+                  ExecStart = "${initiateChild}/bin/${scriptName}";
+                  Type = "simple";
+                  RemainAfterExit = true;
+                  Restart = "always";
+                  RestartSec = 10;
+                  User = "root";
+                  Group = "root";
+                };
+              };
+        in listToAttrs (map mkIPsecInitiator (attrNames ipsecEnabledTransports)))
+      else
+        {});
+
+    ## Configure IKE, IPsec
+    services.strongswan-swanctl = mkIf ipsecEnable
+      (let
+
+       in {
+         enable = true;
+         strongswan.extraConfig = ''
+           charon-systemd {
+             plugins {
+               kernel-snabb {
+                 load = 1000
+               }
+             }
+           }
+         '';
+
+         swanctl = let
+           localPeer = elemAt (attrNames l2vpnCfg.peers.local) 0;
+           localCfg = elemAt (attrValues l2vpnCfg.peers.local) 0;
+           mkChild = peerName: name: transport: localCfg: peerCfg:
+             let
+               plen = {
+                 ipv4 = "/32";
+                 ipv6 = "/128";
+               }.${transport.addressFamily};
+             in with import programs/l2vpn/lib.nix config; {
+               local_ts = singleton "${(getAddress name "local").address}${plen}";
+               remote_ts = singleton "${(getAddress name "remote").address}${plen}";
+               mode = "tunnel";
+               esp_proposals = singleton transport.ipsec.espProposal;
+             };
+           mkIkePeer = name: transports:
+             let
+               peerCfg = l2vpnCfg.peers.remote.${name};
+             in {
+                 local_addrs = singleton "${localCfg.ike.address}";
+                 remote_addrs = singleton "${peerCfg.ike.address}";
+                 rekey_time= "${peerCfg.ike.rekeyTime}";
+                 local.local = {
+                   auth = "psk";
+                   id = "${localPeer}";
+                 };
+                 remote.${name} = {
+                   auth = "psk";
+                   id = "${name}";
+                 };
+                 version = 2;
+                 inherit (peerCfg.ike) proposals;
+                 children = mapAttrs (childName: transport: mkChild name childName transport localCfg peerCfg)
+                                     transports;
+               };
+           mkSecret = name: config:
+             if any (v: v == name) (attrNames ipsecPeers) then
+               {
+                 id."${name}" = "${name}";
+                 secret = config.ike.preSharedKey;
+               }
+             else
+               {};
+
+         in {
+           connections = mapAttrs (peer: transports: mkIkePeer peer transports) ipsecPeers;
+           secrets = {
+             ike = {
+               local = {
+                 id."local" = "${localPeer}";
+                 secret = localCfg.ike.preSharedKey;
+               };
+             } // mapAttrs (name: config: mkSecret name config) l2vpnCfg.peers.remote;
+           };
+         };
       });
 
       services.snmpd = mkIf snmpd-cfg.enable {
