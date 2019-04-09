@@ -338,9 +338,23 @@ in
             filterAttrs (n: v: v.remote.peer == peer) ipsecEnabledTransports;
           peers = unique (mapAttrsToList (n: v: v.remote.peer) ipsecEnabledTransports);
         in listToAttrs (map (peer: nameValuePair peer (transportsForPeer peer)) peers);
-      ipsecPeers = fold (a: b: a // b) {} (map (inst: ipsecPeersForInstance inst) l2vpnInstances);
+      ipsecPeers = fold (a: b: a // b) {} (map ipsecPeersForInstance l2vpnInstances);
       ipsecEnable = length (attrNames ipsecPeers) > 0;
     in mkIf cfg.enable {
+      assertions = [
+        { assertion = length (attrNames l2vpnCfg.peers.local) == 1;
+          message = "Local L2VPN peer must be unique";
+        }
+        { assertion = ipsecEnable -> (
+            let
+              localPeer = elemAt (attrValues l2vpnCfg.peers.local) 0;
+            in
+              localPeer.ike != null
+          );
+          message = "IPsec not enabled for local peer";
+        }
+      ];
+
       systemd.services = let
         mkService = let
           snmpdService = optional snmpd-cfg.enable "snmpd.service ";
@@ -447,19 +461,108 @@ in
 
       (if ipsecEnable then
         (let
-          mkIPsecInitiator = child:
+          mkIPsecServices = child: transport:
             let
-              scriptName = "initiate-${child}";
-              initiateChild = pkgs.writeShellScriptBin scriptName
+              local = transport.local.peer;
+              remote = transport.remote.peer;
+              initiateScriptName = "initiate-${child}";
+              initiateChild = pkgs.writeShellScriptBin initiateScriptName
               ''
+                set -e
+                PATH=$PATH:${makeBinPath [ pkgs.gawk pkgs.strongswan ] }
+
+                ## Keep restarting indefinitely
+                systemctl reset-failed ${child}
+
                 ## Give the Snabb instances some time to set up the
                 ## SA files
                 sleep 5
-                ${pkgs.strongswan}/bin/swanctl --initiate --child ${child}
+
+                echo "Peer: ${remote}"
+                echo "Current status:"
+                swanctl --list-sas --ike ${remote}
+
+                echo "Initiating child ${child}"
+                swanctl --initiate --child ${child}
+
+                get_id () {
+                    echo "$1" | awk '{print $2}' | tr '[#,]' '[  ]'
+                }
+
+                purge () {
+                    if [ $1 = "child" ] || ! [ $ike_purged ]; then
+                        echo "Purging duplicate $1 SA #$2"
+                        swanctl --terminate --$1-id $2
+                        [ $1 = "ike" ] && ike_purged="true" || true
+                    fi
+                }
+
+                child_id=0
+
+                ## Cleanup duplicate IKE and CHILD SAs.  Duplicates can
+                ## occur because both sides can act as an initiator.
+                ## The Strongswan IKE daemon supplies the Snabb
+                ## process only with the latest CHILD SAs that has
+                ## been established.  Multiple concurrent SAs can
+                ## cause Snabb to use the wrong one.
+                swanctl --list-sas | while read line; do
+                    if [[ $line =~ ^${remote}: ]]; then
+                        new_ike_id=$(get_id "$line")
+                        ike_purged=
+                        continue
+                    fi
+                    if [[ $line =~ ${child} ]]; then
+                        new_child_id=$(get_id "$line")
+                        if [ $child_id -gt 0 ]; then
+                            if [ $new_ike_id -eq $ike_id ]; then
+                                if [ $new_child_id -gt $child_id ]; then
+                                    purge "child" $child_id
+                                    child_id=$new_child_id
+                                else
+                                    purge "child" $child_id
+                                fi
+                            elif [ $new_child_id -gt $child_id ]; then
+                                purge "ike" $ike_id
+                                ike_id=$new_ike_id
+                                child_id=$new_child_id
+                            else
+                                purge "ike" $new_ike_id
+                            fi
+                        else
+                            ike_id=$new_ike_id
+                            child_id=$new_child_id
+                        fi
+                        continue
+                    fi
+                done
+
+                echo "New status:"
+                swanctl --list-sas --ike ${remote}
               '';
+              rekeyScriptName = "rekey-${child}";
+              rekeyChild = pkgs.writeShellScriptBin rekeyScriptName
+              ''
+                PATH=$PATH:${makeBinPath [ pkgs.strongswan ] }
+
+                initiator=$(echo -e "${local}\n${remote}" | sort | head -1)
+
+                if [ $initiator = ${local} ]; then
+                  echo "Local system ${local} elected for rekeying"
+                  if swanctl --list-sas --ike ${remote} | egrep '${remote}.*ESTABLISHED' >/dev/null; then
+                    echo "Rekeying CHILD SA ${child}"
+                    swanctl --rekey --child ${child}
+                  else
+                    echo "IKE SA not established, not rekeying"
+                    swanctl --list-sas --ike ${remote}
+                  fi
+                else
+                    echo "Remote system ${remote} elected for rekeying"
+                fi
+              '';
+              childService = singleton "${child}.service";
               l2vpnServices = map (inst: inst.name + ".service") l2vpnInstances;
 
-            in nameValuePair
+            in singleton (nameValuePair
               child
               { description = "IPsec initiator for child SA ${child}";
 
@@ -469,129 +572,167 @@ in
                 after = [ "strongswan-swanctl.service" ] ++ l2vpnServices;
 
                 serviceConfig = {
-                  ExecStart = "${initiateChild}/bin/${scriptName}";
+                  ExecStart = "${initiateChild}/bin/${initiateScriptName}";
                   Type = "simple";
                   RemainAfterExit = true;
                   Restart = "always";
-                  RestartSec = 10;
+                  RestartSec = 1;
                   User = "root";
                   Group = "root";
                 };
-              };
-        in listToAttrs (map mkIPsecInitiator (attrNames ipsecEnabledTransports)))
+              }) ++
+              singleton (nameValuePair
+              (child + "_rekey")
+              { description = "IPsec rekey for child SA ${child}";
+
+                wantedBy = [ "multi-user.target" ];
+                wants = childService;
+                requires = childService;
+                after = childService;
+
+                serviceConfig = {
+                  ExecStart = "${rekeyChild}/bin/${rekeyScriptName}";
+                  Type = "oneshot";
+                  User = "root";
+                  Group = "root";
+                };
+              });
+        in listToAttrs (flatten (attrValues (mapAttrs mkIPsecServices ipsecEnabledTransports))))
       else
         {});
 
+      systemd.timers = if ipsecEnable then
+        (let
+          mkIPsecRekeyTimer = child: transport:
+            nameValuePair
+              (child + "_rekey")
+              { description = "IPsec rekey for child SA ${child}";
+
+                wantedBy = [ "timers.target" ];
+                timerConfig = {
+                  OnUnitInactiveSec = transport.ipsec.rekeyTime;
+                  OnBootSec = transport.ipsec.rekeyTime;
+                };
+              };
+        in mapAttrs' mkIPsecRekeyTimer ipsecEnabledTransports)
+      else
+        {};
+
     ## Configure IKE, IPsec
-    services.strongswan-swanctl = mkIf ipsecEnable
-      (let
-
-       in {
-         enable = true;
-         strongswan.extraConfig = ''
-           charon-systemd {
-             plugins {
-               kernel-snabb {
-                 load = 1000
-               }
-             }
-           }
-         '';
-
-         swanctl = let
-           localPeer = elemAt (attrNames l2vpnCfg.peers.local) 0;
-           localCfg = elemAt (attrValues l2vpnCfg.peers.local) 0;
-           mkChild = peerName: name: transport: localCfg: peerCfg:
-             let
-               plen = {
-                 ipv4 = "/32";
-                 ipv6 = "/128";
-               }.${transport.addressFamily};
-             in with import programs/l2vpn/lib.nix config; {
-               local_ts = singleton "${(getAddress name "local").address}${plen}";
-               remote_ts = singleton "${(getAddress name "remote").address}${plen}";
-               mode = "tunnel";
-               esp_proposals = singleton transport.ipsec.espProposal;
-             };
-           mkIkePeer = name: transports:
-             let
-               peerCfg = l2vpnCfg.peers.remote.${name};
-             in {
-                 local_addrs = singleton "${localCfg.ike.address}";
-                 remote_addrs = singleton "${peerCfg.ike.address}";
-                 rekey_time= "${peerCfg.ike.rekeyTime}";
-                 local.local = {
-                   auth = "psk";
-                   id = "${localPeer}";
-                 };
-                 remote.${name} = {
-                   auth = "psk";
-                   id = "${name}";
-                 };
-                 version = 2;
-                 inherit (peerCfg.ike) proposals;
-                 children = mapAttrs (childName: transport: mkChild name childName transport localCfg peerCfg)
-                                     transports;
-               };
-           mkSecret = name: config:
-             if any (v: v == name) (attrNames ipsecPeers) then
-               {
-                 id."${name}" = "${name}";
-                 secret = config.ike.preSharedKey;
-               }
-             else
-               {};
-
-         in {
-           connections = mapAttrs (peer: transports: mkIkePeer peer transports) ipsecPeers;
-           secrets = {
-             ike = {
-               local = {
-                 id."local" = "${localPeer}";
-                 secret = localCfg.ike.preSharedKey;
-               };
-             } // mapAttrs (name: config: mkSecret name config) l2vpnCfg.peers.remote;
-           };
-         };
-      });
-
-      services.snmpd = mkIf snmpd-cfg.enable {
-        agentX = {
-          commonArgs = let
-            isUnique = l:
-              length l == length (unique l);
-            names = map (s: s.name) cfg.interfaces;
-            mkIfIndexTable = pkgs.writeText "snabb-ifindex"
-              ''${concatStringsSep "\n"
-                                   (imap (i: v: "${v} ${toString i}")
-                                         (names ++ cfg.subInterfaces))}'';
-          in
-            if isUnique names then
-              "--ifindex=${mkIfIndexTable}"
-            else
-              throw "names in services.snabb.interfaces are not unique";
-
-          subagents = [
-            rec {
-              name = "interface";
-              executable = pkgs.snabbSNMPAgents + "/bin/${name}";
-              args = "--shmem-dir=${cfg.shmemDir}";
-              modulesInclude = [ "-ifTable" ];
+    services.strongswan-swanctl = mkIf ipsecEnable {
+      enable = true;
+      strongswan.extraConfig = ''
+        charon-systemd {
+          plugins {
+            kernel-snabb {
+              load = 1000
             }
-          ];
-        };
+          }
+        }
+      '';
 
-        ## The Snabb SNMP sub-agent uses community "snabb" to read
-        ## sysUpTime in order to be independent of the "public" community.
-        views.sysUpTime = {
-          type = "included";
-          oid = ".1.3.6.1.2.1.1.3";
-        };
-        communities = {
-          ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
-          ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+      swanctl = let
+        localPeer = elemAt (attrNames l2vpnCfg.peers.local) 0;
+        localCfg = elemAt (attrValues l2vpnCfg.peers.local) 0;
+        mkChild = peerName: name: transport: localCfg: peerCfg:
+          let
+            plen = {
+              ipv4 = "/32";
+              ipv6 = "/128";
+            }.${transport.addressFamily};
+          in with import programs/l2vpn/lib.nix config; {
+            local_ts = singleton "${(getAddress name "local").address}${plen}";
+            remote_ts = singleton "${(getAddress name "remote").address}${plen}";
+            mode = "tunnel";
+            esp_proposals = singleton transport.ipsec.espProposal;
+            rekey_time = transport.ipsec.rekeyTime;
+          };
+        mkIkePeer = name: transports:
+          let
+            peerCfg = l2vpnCfg.peers.remote.${name};
+          in {
+              local_addrs = localCfg.ike.addresses;
+              remote_addrs = peerCfg.ike.addresses;
+              rekey_time= "${peerCfg.ike.rekeyTime}";
+
+              local.local = {
+                auth = "psk";
+                id = "${localPeer}";
+              };
+              remote.${name} = {
+                auth = "psk";
+                id = "${name}";
+              };
+              version = 2;
+              inherit (peerCfg.ike) proposals;
+              children = mapAttrs (childName: transport: mkChild name childName transport localCfg peerCfg)
+                                  transports;
+            };
+        mkSecret = name: config:
+          if any (v: v == name) (attrNames ipsecPeers) then
+            {
+              id."${name}" = "${name}";
+              secret = config.ike.preSharedKey;
+            }
+          else
+            {};
+
+      in {
+        connections = mapAttrs (peer: transports: mkIkePeer peer transports) ipsecPeers;
+        secrets = {
+          ike = {
+            local = {
+              id."local" = "${localPeer}";
+              secret = localCfg.ike.preSharedKey;
+            };
+          } // mapAttrs mkSecret l2vpnCfg.peers.remote;
         };
       };
     };
+
+    ## Strangely, the strongswan-swanctl module does not open these
+    ## ports itself.
+    networking.firewall = mkIf ipsecEnable {
+      allowedUDPPorts = [ 500 4500 ];
+    };
+
+    services.snmpd = mkIf snmpd-cfg.enable {
+      agentX = {
+        commonArgs = let
+          isUnique = l:
+            length l == length (unique l);
+          names = map (s: s.name) cfg.interfaces;
+          mkIfIndexTable = pkgs.writeText "snabb-ifindex"
+            ''${concatStringsSep "\n"
+                                 (imap (i: v: "${v} ${toString i}")
+                                       (names ++ cfg.subInterfaces))}'';
+        in
+          if isUnique names then
+            "--ifindex=${mkIfIndexTable}"
+          else
+            throw "names in services.snabb.interfaces are not unique";
+
+        subagents = [
+          rec {
+            name = "interface";
+            executable = pkgs.snabbSNMPAgents + "/bin/${name}";
+            args = "--shmem-dir=${cfg.shmemDir}";
+            modulesInclude = [ "-ifTable" ];
+          }
+        ];
+      };
+
+      ## The Snabb SNMP sub-agent uses community "snabb" to read
+      ## sysUpTime in order to be independent of the "public" community.
+      views.sysUpTime = {
+        type = "included";
+        oid = ".1.3.6.1.2.1.1.3";
+      };
+      communities = {
+        ro = [ { community = "snabb"; source = "127.0.0.1"; view = "sysUpTime"; } ];
+        ro6 = [ { community = "snabb"; source = "::1"; view = "sysUpTime"; } ];
+      };
+    };
+  };
 
 }

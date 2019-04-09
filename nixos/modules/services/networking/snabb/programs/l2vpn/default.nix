@@ -42,10 +42,10 @@ in
           module = {
             options = {
               ike = {
-                address = mkOption {
-                  type = types.str;
+                addresses = mkOption {
+                  type = types.listOf types.str;
                   description = ''
-                    The local address used for communication with
+                    The local addresses available for communication with
                     IKE peers.
                   '';
                 };
@@ -97,11 +97,14 @@ in
           local = mkOption {
             type = types.attrsOf (types.submodule module);
             description = ''
+              Definition of the local transport endpoint.  This set
+              must contain exactly one attribute.
             '';
           };
           remote = mkOption {
             type = types.attrsOf  (types.submodule module);
             description = ''
+              Definition of remote transport endpoints.
             '';
           };
         };
@@ -930,11 +933,11 @@ in
 
       mkRoutesForVpls = vpls:
         map (pw: mkRoute vpls pw) (mapAttrsToList (name: value: value)
-                                              vpls.pseudowires);
+                                                  vpls.pseudowires);
 
       mkRoutesForInstance = instance:
-        map (vpls: mkRoutesForVpls vpls) (mapAttrsToList (name: value: value)
-                                                         instance.vpls);
+        map mkRoutesForVpls (mapAttrsToList (name: value: value)
+                                            instance.vpls);
 
     in flatten (map mkRoutesForInstance (mapAttrsToList (name: value: value)
                                                          cfg.instances)));
