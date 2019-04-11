@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 
 with lib;
+with import ./lib.nix config;
 
 let
   cfg = config.services.snabb.programs.l2vpn;
@@ -9,7 +10,17 @@ let
   cfg-exabgp = config.services.exabgp;
   mkSubmodule = module:
     types.submodule (import module { inherit lib; });
+  addressFamilyList = [ "ipv4" "ipv6" ];
+  addressFamilyType = types.enum addressFamilyList;
 
+  ## Mapping of IKE ESP proposals to algorithm names
+  ## used by the Snabb ESP library.  There must be a
+  ## mapping for each element of the espProposal
+  ## config option.
+  encAlgFromEspProposal = proposal:
+    {
+      "aes128gcm128-x25519-esn" = "aes-gcm-16-icv";
+    }.${proposal};
 in
 {
   imports = [ ./devices ];
@@ -25,6 +36,151 @@ in
           If not specified, the global default options are applied.
         '';
       };
+
+      peers =
+        let
+          module = {
+            options = {
+              ike = {
+                addresses = mkOption {
+                  type = types.listOf types.str;
+                  description = ''
+                    The local addresses available for communication with
+                    IKE peers.
+                  '';
+                };
+                preSharedKey = mkOption {
+                  type = types.str;
+                  description = '';
+                    The pre-shared key used to authenticate the peer.
+                  '';
+                };
+               rekeyTime = mkOption {
+                 type = types.string;
+                 default = "4h";
+                 description = ''
+                   Interval after which the IKE SA is re-keyed.
+                 '';
+                };
+                proposals = mkOption {
+                  type = types.listOf (types.enum [ "aes128-sha256-x25519-esn" ]);
+                  default = [ "aes128-sha256-x25519-esn" ];
+                  description = ''
+                    A list of IKE proposals.
+                  '';
+                };
+              };
+              endpoints = mkOption {
+                type = types.attrsOf (types.submodule {
+                  options = {
+                    addressFamily = mkOption {
+                      type = addressFamilyType;
+                      description = ''
+                        The address family of the endpoint.
+                      '';
+                    };
+                    address = mkOption {
+                      type = types.str;
+                      description = ''
+                        The address of the endpoint.
+                      '';
+                    };
+                  };
+                });
+                description = ''
+                  An attribute set of endpoints associated with the peer.
+                '';
+              };
+            };
+          };
+        in {
+          local = mkOption {
+            type = types.attrsOf (types.submodule module);
+            description = ''
+              Definition of the local transport endpoint.  This set
+              must contain exactly one attribute.
+            '';
+          };
+          remote = mkOption {
+            type = types.attrsOf  (types.submodule module);
+            description = ''
+              Definition of remote transport endpoints.
+            '';
+          };
+        };
+
+      transports =
+        let
+          selectModule = {
+            options = {
+              peer = mkOption {
+                type = types.str;
+                description = ''
+                  The name of the peer from which to select the
+                  endpoint.
+                '';
+              };
+              endpoint = mkOption {
+                type = types.str;
+                description = ''
+                  The name of the endpoint to select from the peer.
+                '';
+              };
+            };
+          };
+        in mkOption {
+          type = types.attrsOf (types.submodule {
+            options = {
+              addressFamily = mkOption {
+                type = addressFamilyType;
+                description = ''
+                  The address family of the transport.  The
+                  selected endpoints must belong to this
+                  address family.
+                '';
+              };
+              local = mkOption {
+                type = types.submodule selectModule;
+                description = ''
+                  Selection of the local transport endpoint.
+                '';
+              };
+              remote = mkOption {
+                type = types.submodule selectModule;
+                description = ''
+                  Selection of the remote transport endpoint.
+                '';
+              };
+              ipsec = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Whether to enable IPsec for the transport.
+                  '';
+                };
+                espProposal = mkOption {
+                  type = types.enum [ "aes128gcm128-x25519-esn" ];
+                  default = "aes128gcm128-x25519-esn";
+                  description = ''
+                    A choice of a specific proposal for ESP.
+                  '';
+                };
+                rekeyTime = mkOption {
+                  type = types.str;
+                  default = "1h";
+                  description = ''
+                    Time interval after which the child SA created
+                    for this transport is re-keyed.
+                  '';
+                };
+              };
+            };
+          });
+          description = ''
+            An attribute set defining all transports known to the system.
+          '';
+        };
 
       instances = mkOption {
         default = {};
@@ -45,6 +201,16 @@ in
               '';
             };
 
+            usePtreeMaster = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Whether this instance should be controlled by the Snabb
+                ptree master service to allow dynamic reconfiguration
+                without restarting the instance service.
+              '';
+            };
+
             programOptions = mkOption {
               type = types.nullOr types.str;
               default = null;
@@ -53,6 +219,44 @@ in
                 Command-line options to pass to this service instance.
                 If not specified, the default options are applied.
               '';
+            };
+
+            luajitWorker = {
+              options = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                description = ''
+                  A list of LuaJIT runtime options passed to Snabb worker
+                  processes (<option>programOptions</option> apply to the
+                  supervisor process only).
+                '';
+              };
+              dump = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Whether to enable the JIT dump facility.
+                  '';
+                };
+                option = mkOption {
+                  type = types.str;
+                  default = "";
+                  example = "+rs";
+                  description = ''
+                    The configuration option for the JIT dump facility.
+                  '';
+                };
+                file = mkOption {
+                  type = types.str;
+                  default = "/tmp/dump-%p";
+                  description = ''
+                    The full path name of the file to write the dump to.
+                    The string "%p" will be replaced with the ID of the
+                    worker process.
+                  '';
+                };
+              };
             };
 
             vpls = let
@@ -179,7 +383,7 @@ in
                     type = types.attrsOf (types.submodule {
                       options = {
                         addressFamily = mkOption {
-                          type = types.enum [ "ipv4" "ipv6" ];
+                          type = addressFamilyType;
                           default = "ipv6";
                           description = ''
                             The address family to use for this pseudowire.  The
@@ -188,22 +392,11 @@ in
                             family.
                           '';
                         };
-                        localAddress = mkOption {
+                        transport = mkOption {
                           type = types.str;
                           default = null;
-                          example = "2001:DB8:0:1::1";
                           description = ''
-                            The address of the local tunnel endpoint within the
-                            specified address family.
-                          '';
-                        };
-                        remoteAddress = mkOption {
-                          type = types.str;
-                          default = null;
-                          example = "2001:DB8:0:1::1";
-                          description = ''
-                            The address of the remote tunnel endpoint within the
-                            specified address family.
+                            The name of the transport to use for this pseudowire.
                           '';
                         };
                         vcID = mkOption {
@@ -284,10 +477,15 @@ in
       indentBlock = count:
         let
           spaces = concatStrings (genList (i: " ") count);
+          maybePrepend = spaces: line:
+            if line != "" then
+              concatStrings [ spaces line ]
+            else
+              line;
         in text:
           let
             lines = splitString "\n" text;
-          in concatStringsSep "\n" (map (line: concatStrings [ spaces line ])
+          in concatStringsSep "\n" (map (line: maybePrepend spaces line)
                                         lines);
 
       subIntfName = intf: vid:
@@ -295,55 +493,61 @@ in
 
       acConfig = name: ac: ignore:
         ''
-          ${name} = { interface = "${ac}" },
+          attachment-circuit {
+            name "${name}";
+            interface "${ac}";
+          }
         '';
 
       tunnelConfig = tunnel:
         ''
-          tunnel = {
+          tunnel {
         '' +
         (indentBlock 2
           (if tunnel.type == "l2tpv3" then
             let conf = tunnel.config.l2tpv3; in
              ''
-               type = "l2tpv3",
-               config = {
-                 local_cookie = "${conf.localCookie}",
-                 remote_cookie = "${conf.remoteCookie}"
-               }''
+               l2tpv3 {
+                 local-cookie "${conf.localCookie}";
+                 remote-cookie "${conf.remoteCookie}";
+               }
+             ''
          else # type "gre"
            ''
-             type = "gre"'')) + "\n" +
+             gre {}
+           '')) +
         ''
-          }, -- tunnel'';
+          }
+      '';
 
       ccConfig = cc:
         ''
-          cc = {
-            heartbeat = ${toString cc.heartbeat},
-            dead_factor = ${toString cc.deadFactor}
-          }, -- cc'';
+          control-channel {
+            heartbeat ${toString cc.heartbeat};
+            dead-factor ${toString cc.deadFactor};
+          }
+        '';
 
-      pwConfig = name: pw: ignore:
+      pwConfig = name: pw: vpls:
         ''
-          ${name} = {
-            afi = "${pw.addressFamily}",
-            local_address = "${pw.localAddress}",
-            remote_address = "${pw.remoteAddress}",
-            vc_id = ${toString pw.vcID},
+          pseudowire {
+            name "${name}";
+            vc-id ${toString pw.vcID};
+            transport "${pw.transport}";
         '' +
-        optionalString (pw.tunnel != null)
-                       (indentBlock 2
-                        (tunnelConfig pw.tunnel)) +
-        (let cc = pw.controlChannel; in
-         optionalString (cc != null)
-           (indentBlock 2 (ccConfig (pw.controlChannel //
-                          (if cc.enable then
-                             {}
-                           else
-                             { heartbeat = 0; }))))) +
+        (indentBlock 2
+           (if pw.tunnel != null then
+              (tunnelConfig pw.tunnel)
+           else
+              (tunnelConfig vpls.defaultTunnel))) +
+        (indentBlock 2
+           (let cc = if pw.controlChannel != null then
+                        pw.controlChannel
+                     else
+                        vpls.defaultControlChannel; in
+            optionalString cc.enable (ccConfig cc))) +
         ''
-          },
+          }
         '';
 
       mkConfigIterator = attr: f:
@@ -356,45 +560,36 @@ in
 
       vplsConfig = name: vpls: ignore:
         ''
-          ${name} = {
-            description = "${vpls.description}",
-            uplink = "${vpls.uplink}",
-            mtu = ${toString vpls.mtu},
-            bridge = {
-              type = "${vpls.bridge.type}",
+          vpls {
+            name "${name}";
+            description "${vpls.description}";
+            uplink "${vpls.uplink}";
+            mtu ${toString vpls.mtu};
+            bridge {
+              ${vpls.bridge.type} {
         '' +
         (let bridge = vpls.bridge; in
         if bridge.type == "learning" then
           let mac = bridge.config.learning.macTable; in
           (indentBlock 4
           ''
-            config = {
-              mac_table = {
-                verbose = ${boolToString mac.verbose},
-                timeout = ${toString mac.timeout}
-              },
-            },'') + "\n"
+              mac-table {
+                verbose ${boolToString mac.verbose};
+                timeout ${toString mac.timeout};
+              }
+            }
+          '')
         else
-          "") +
+          "{}") +
         (indentBlock 2
         ''
-          }, --bridge'') + "\n" +
-        (indentBlock 2 (tunnelConfig vpls.defaultTunnel)) + "\n" +
-        (optionalString vpls.defaultControlChannel.enable
-                        (indentBlock 2 (ccConfig vpls.defaultControlChannel)) + "\n") +
+          }
+        '') +
         (indentBlock 2
+         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
+        (indentBlock 2 ((mkConfigIterator "pseudowires" pwConfig) vpls vpls)) +
         ''
-          ac = {'') + "\n" +
-        (indentBlock 4
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) + "\n" +
-        (indentBlock 2
-        ''
-          },
-          pw = {'') + "\n" +
-        (indentBlock 4 ((mkConfigIterator "pseudowires" pwConfig) vpls null)) + "\n" +
-        ''
-            }, -- pw
-          }, -- vpls ${name}
+          } // vpls ${name}
         '';
 
       addressFamilyConfig = afi: afis:
@@ -403,34 +598,40 @@ in
             afiConfig = afis.${afi};
           in (indentBlock 2
             ''
-              ${afi} = {
-                address = "${afiConfig.address}",
-                next_hop = "${afiConfig.nextHop}",'') + "\n" +
+              ${afi} {
+                address "${afiConfig.address}";
+                next-hop "${afiConfig.nextHop}";
+            '') +
              optionalString (afiConfig.nextHopMacAddress != null)
                (indentBlock 4
-                ''next_hop_mac = "${afiConfig.nextHopMacAddress}",'' + "\n") +
+                ''
+                  next-hop-mac "${afiConfig.nextHopMacAddress}";
+                '') +
              (indentBlock 2
              ''
-               },'' + "\n")
+               }
+             '')
           else
             "";
 
       addressFamiliesConfig = conf:
         ''
-          afs = {
-        '' + concatStringsSep "\n" (map (afi: addressFamilyConfig afi conf.addressFamilies) [ "ipv4" "ipv6" ])
-        +
-        ''}, -- afs'';
+          address-families {
+        '' +
+        concatStrings (map (afi: addressFamilyConfig afi conf.addressFamilies) addressFamilyList) +
+        ''
+          }
+        '';
 
       vlansConfig = conf: intf:
         ''
-          {
-            description = "${conf.description}",
-            vid = ${toString conf.vid},
+          vlan {
+            description "${conf.description}";
+            vid ${toString conf.vid};
         '' +
         (if conf.mtu != null then
           if conf.mtu <= intf.mtu then
-            "  mtu = ${toString conf.mtu},\n"
+            "  mtu ${toString conf.mtu};\n"
           else
             throw ("MTU ${toString conf.mtu} of subinterface "
                    + "${subIntfName intf conf.vid} exceeds MTU "
@@ -438,9 +639,9 @@ in
         else
           "") +
         optionalString (conf.addressFamilies != null)
-          (indentBlock 2 ''${addressFamiliesConfig conf}'' + "\n") +
+          (indentBlock 2 ''${addressFamiliesConfig conf}'') +
         ''
-          }, -- vlan
+          }
         '';
 
       interfaceConfig = intf: ignore:
@@ -468,86 +669,139 @@ in
           subIntfs = intf.subInterfaces;
         in if intfSnabb != null then
              ''
-               {
-                 name = "${intf.name}",
+               interface {
+                 name "${intf.name}";
                  ${optionalString (intf.description != null)
-                     ''description = "${intf.description}",''}
-                 driver = {
-                   path = "${driver.path}",
-                   name = "${driver.name}",
+                     ''description "${intf.description}";''}
+                 driver {
+                   path "${driver.path}";
+                   name "${driver.name}";
              '' +
              (if driver.literalConfig == null then
                 if nicConfig.pciAddress != null then
                   (indentBlock 4
                    ''
-                     config = {
-                       pciaddr = "${nicConfig.pciAddress}",
-                     },'') + "\n" +
+                     config "{
+                       pciaddr = '${nicConfig.pciAddress}',
+                     }";'') + "\n" +
                   optionalString (driver.extraConfig != null)
                   (indentBlock 4
                     ''
-                      extra_config = ${driver.extraConfig},'') + "\n"
+                      extra-config "${driver.extraConfig}";'') + "\n"
                 else
                   throw "missing PCI address for interface ${intf.name}"
               else
                 (indentBlock 4
                  ''
-                   config = ${driver.literalConfig},'') + "\n") +
+                   config "${driver.literalConfig}";'') + "\n") +
              (indentBlock 2 
               ''
-                },
-                mtu = ${toString intf.mtu},'') + "\n" +
+                }
+                mtu ${toString intf.mtu};'') + "\n" +
              optionalString (intf.mirror != null)
                (indentBlock 2
                ''
-                 mirror = {
-                   rx = ${boolToString intf.mirror.rx},
-                   tx = ${boolToString intf.mirror.tx},
-                   type = "${intf.mirror.type}",
-                 },'' + "\n") +
+                 mirror {
+                   rx ${boolToString intf.mirror.rx};
+                   tx ${boolToString intf.mirror.tx};
+                   type "${intf.mirror.type}";
+                 }
+               '') + ## TODO: name
              optionalString (intf.addressFamilies != null)
-               (indentBlock 2 ''${addressFamiliesConfig intf}'' + "\n") +
+               (indentBlock 2 ''${addressFamiliesConfig intf}'') +
              (indentBlock 2
              ''
-               trunk = {
-                 enable = ${boolToString intf.trunk.enable},
-                 encapsulation = ${
-                   let enc = intf.trunk.encapsulation; in
-                   if (enc == "dot1q" || enc == "dot1ad") then
-                     ''"${enc}"''
-                   else
-                     enc},
-                 vlans = {'') + "\n" +
-             ((indentBlock 6 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk intf)) + "\n") +
+               trunk {
+                 enable ${boolToString intf.trunk.enable};
+                 encapsulation ${intf.trunk.encapsulation};
+             '') +
+             ((indentBlock 4 ((mkConfigIterator "vlans" vlansConfig)
+                                                intf.trunk intf))) +
              ''
-                   }, -- vlans
-                 }, -- trunk
-               }, -- interface ${intf.name}
+                 }
+               } // interface ${intf.name}
              ''
            else
              throw ("L2VPN: the interface named ${intf.name} is not"
                     + " declared in services.snabb.interfaces");
 
-      instanceConfig = name: config:
+      mkEndpoint = name: config: ignore:
+        ''
+          endpoint {
+            name "${name}";
+            address {
+              ${config.addressFamily} "${config.address}";
+            }
+          }
+        '';
+
+      mkPeers = name: config: type:
+        ''
+          ${type} {
+            name "${name}";
+        '' +
+        (indentBlock 2
+          ((mkConfigIterator "endpoints" mkEndpoint) config null)) +
+        ''
+          }
+        '';
+
+      mkTransport = name: config: ignore:
+        let
+          mkEp = type:
+          ''
+            ${type} {
+              peer "${config.${type}.peer}";
+              endpoint "${config.${type}.endpoint}";
+            }
+          '';
+        in ''
+          transport {
+            name "${name}";
+            address-family "${config.addressFamily}";
+            ipsec {
+              enable ${boolToString config.ipsec.enable};
+              encryption-algorithm "${encAlgFromEspProposal config.ipsec.espProposal}";
+            }
+        '' + (indentBlock 2 (mkEp "local")) + (indentBlock 2 (mkEp "remote")) +
+        ''
+          }
+        '';
+
+      instanceConfig = name: instanceName: config:
         let
           uplink = config.uplink;
         in pkgs.writeText "l2vpn-${name}"
          (''
-            return {
+            l2vpn-config {
+              instance-name ${instanceName};
           '' +
-          optionalString (cfg-snabb.shmemDir != null)
-            (indentBlock 2 ''shmem_dir = "${cfg-snabb.shmemDir}",'' + "\n") +
-          optionalString (cfg-snabb.snmp.enable)
-            (indentBlock 2
-              ''
-                snmp = {
-                  enable = true,
-                  interval = ${toString cfg-snabb.snmp.interval},
-                },'' + "\n") +
           (indentBlock 2
             ''
-              interfaces = {'') + "\n" +
+              snmp {
+                enable ${boolToString cfg-snabb.snmp.enable};
+                interval ${toString cfg-snabb.snmp.interval};
+              }
+            '') +
+          (indentBlock 2
+            ''
+              luajit {
+            '') +
+          (indentBlock 4
+            (concatStrings (map (opt: ''option "${opt}";'' + "\n") config.luajitWorker.options))) +
+          (indentBlock 4
+            (let dump = config.luajitWorker.dump; in
+            ''
+              dump {
+                enable ${boolToString dump.enable};
+                option "${dump.option}";
+                file "${dump.file}";
+              }
+            '')) +
+          (indentBlock 2
+            ''
+              }
+            '') +
           (let
             ## Select the interfaces referred to by uplinks and acs
             baseInterface = intf:
@@ -562,26 +816,40 @@ in
                                               refInterfaces)) cfg-snabb.interfaces).right;
             };
           in
-          (indentBlock 4 ((mkConfigIterator "interfaces" interfaceConfig)
+          (indentBlock 2 ((mkConfigIterator "interfaces" interfaceConfig)
                                             ourInterfaces null))) +
           (indentBlock 2
+            ''
+              peers {
+            '') +
+          (indentBlock 4 ((mkConfigIterator "local" mkPeers) cfg.peers "local")) +
+          (indentBlock 4 ((mkConfigIterator "remote" mkPeers) cfg.peers "remote")) +
+          (indentBlock 2
+            ''
+              }
+            '') +
+          (indentBlock 2 ((mkConfigIterator "transports" mkTransport) cfg null)) +
+          (indentBlock 2 ((mkConfigIterator "vpls" vplsConfig) config null)) +
           ''
-            }, -- interfaces
-            vpls = {'') + "\n" +
-          (indentBlock 4 ((mkConfigIterator "vpls" vplsConfig) config null)) + "\n" +
-          ''
-              } -- vpls
             }
           '');
 
-      mkL2VPNService = name: config: {
-        name = "snabb-l2vpn-" + name;
-        inherit (config) enable;
+      mkL2VPNService = programInstanceName: config: rec {
+        name = "snabb-${programName}-${programInstanceName}";
+        inherit (config) enable usePtreeMaster;
+        inherit programInstanceName;
         description = "Snabb L2VPN termination point ${name}";
         programName = "l2vpn";
         programOptions = optionalString (config.programOptions != null)
                                         config.programOptions;
-        programArgs = "${instanceConfig name config}";
+        programConfig = instanceConfig name programInstanceName config;
+        programArgs = if config.usePtreeMaster then
+                         let
+                           instDir = cfg-snabb.stateDir + "/l2vpn/" + programInstanceName;
+                         in
+                           "${instDir}/config ${instDir}"
+                      else
+                        "${programConfig}";
       };
     in map (name: mkL2VPNService name cfg.instances.${name})
        (attrNames cfg.instances);
@@ -596,12 +864,23 @@ in
     ## Register the SNMP sub-agent that handles the L2VPN-related
     ## MIBs with the SNMP daemon.
     services.snmpd.agentX.subagents = mkIf cfg-snmpd.enable [
-      rec {
+      (let
+        ## Construct the list of active pseudowires so the agent
+        ## can ignore left-over index files.
+        collectInstance = instName: inst:
+          let
+            collectVPLS = name: config:
+              map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires);
+          in mapAttrsToList collectVPLS (inst.vpls);
+        pwIDs = pkgs.writeText "snabb-pseudowires"
+          (concatStringsSep "\n" (flatten (mapAttrsToList collectInstance cfg.instances)));
+      in rec {
         name = "pseudowire";
         executable = pkgs.snabbSNMPAgents + "/bin/${name}";
         args = ("--mibs-dir=${pkgs.snabbPwMIBs} "
-                + "--shmem-dir=${cfg-snabb.shmemDir}");
-      }
+                + "--shmem-dir=${cfg-snabb.shmemDir} "
+                + "--pseudowires=${pwIDs}");
+      })
     ];
 
     ## Generate the list of IP addresses and associated next-hops
@@ -660,16 +939,17 @@ in
             ipv4 = 32;
             ipv6 = 128;
           };
-        in { route = "${pw.localAddress}/${toString addrBits.${pw.addressFamily}}";
-             nextHop = nextHopFromIfConfig vpls.uplink pw.addressFamily; };
+          addr = getLocalAddress pw.transport;
+        in { route = "${addr.address}/${toString addrBits.${addr.afi}}";
+             nextHop = nextHopFromIfConfig vpls.uplink addr.afi; };
 
       mkRoutesForVpls = vpls:
         map (pw: mkRoute vpls pw) (mapAttrsToList (name: value: value)
-                                              vpls.pseudowires);
+                                                  vpls.pseudowires);
 
       mkRoutesForInstance = instance:
-        map (vpls: mkRoutesForVpls vpls) (mapAttrsToList (name: value: value)
-                                                         instance.vpls);
+        map mkRoutesForVpls (mapAttrsToList (name: value: value)
+                                            instance.vpls);
 
     in flatten (map mkRoutesForInstance (mapAttrsToList (name: value: value)
                                                          cfg.instances)));

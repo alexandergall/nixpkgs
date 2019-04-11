@@ -35,8 +35,8 @@ buildPerlPackage  rec {
   src = fetchFromGitHub {
     owner = "alexandergall";
     repo = "snabb-snmp-subagent";
-    rev = "v2";
-    sha256 = "1gjd0lnmlqqck3fx1cjb9zhfb65r5nqv4ng22yynrffv20ia7vkm";
+    rev = "v3";
+    sha256 = "0xz18yqvlrxs2vmkc0pawp2yd6lf8lvqasmspym1clngxbkv6gc8";
   };
   preConfigure = ''cd subagent'';
   propagatedBuildInputs = with perlPackages; [

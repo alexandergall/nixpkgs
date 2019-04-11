@@ -16,6 +16,34 @@
 ###
 ### This is a first shot at how this could be done.  Comments are
 ### very welcome :)
+###
+### Handling of programs that use ptree:
+###
+### The goal is to allow reconfiguration without restaring a process.
+### Uses directory hierarchy in <stateDir>
+###
+###   instStateDir = <stateDir>/services/<program>/<instance>
+###
+### The service for an instance must not depend on anything in the Nix
+### store that changes when the configuration is updated.  The service
+### must assume that its configuration is located in <instStateDir>/config
+###
+### Helper service to manage ptree-based services.  A ptree service must
+### apply "Wants" and "After" to the helper.
+###
+###   * Depends on service configurations of all ptree services in the
+###     Nix store
+###   * Gets restarted whenever a configuration changes after
+###     a "nixos-rebuild"
+###   * One config file per service (too restrictive?)
+###
+### When the helper is started
+###
+###   * Store the updated config files in <instStateDir>/config
+###   * If a service is already running
+###      * Get the PID from <instStateDir>/master.pid
+###      * Execute "snabb config <PID> load <instStateDir>/config
+###
 
 { config, pkgs, lib, ... }:
 
@@ -64,25 +92,20 @@ in
         '';
       };
 
-      ## FIXME: do we need this?
       stateDir = mkOption {
         type = types.str;
-        default = "/var/lib/snabb";
-        example = literalExample ''"/var/lib/snabb"'';
+        default = "/var/run/snabb";
         description = ''
           Path to a directory where Snabb processes can store persistent state.
         '';
       };
 
-      ## FIXME: this will probably go away once the Snabb MIB stuff is moved
-      ## to the new-style core/shm framework.
       shmemDir = mkOption {
         type = types.str;
-        default = "/var/lib/snabb/shmem";
-        example = literalExample ''"/var/run/snabb"'';
+        default = "/var/run/snabb/snmp";
         description = ''
           Path to a directory where Snabb processes create shared memory
-          segments.  This is used by the legacy lib/ipc/shmem mechanism.
+          segments for SNMP.  This is used by the legacy lib/ipc/shmem mechanism.
         '';
       };
 
@@ -269,11 +292,16 @@ in
       ##   enable
       ##     A boolean that indicates whether the systemd service should
       ##     actually be created or not
+      ##   usePtreeMaster
+      ##     Whether to use the ptree master service to reload a running
+      ##     instance
       ##   description
       ##     A string that will be used as description in the systemd
       ##     service definition
       ##   programName
       ##     The name of the Snabb program to run
+      ##   programInstanceName
+      ##     The name of the instance of the program
       ##   programOptions
       ##     A string of command-line options passed to the program
       ##     being run.  If the string is empty, the global option
@@ -282,6 +310,8 @@ in
       ##   programArgs
       ##     A string of command-line arguments passed to the program
       ##     being run
+      ##   programConfig
+      ##     Configuration file, used if usePtreeMaster is true
       instances = mkOption {
         type = types.listOf types.attrs;
         default = [];
@@ -296,39 +326,375 @@ in
 
   ###### implementation
 
-  config = mkIf cfg.enable {
-    systemd.services = let
-      mkService = let
-        snmpdService = optional snmpd-cfg.enable "snmpd.service ";
-      in instance:
-        nameValuePair
-          instance.name
-          { inherit (instance) description;
+  config =
+    let
+      l2vpnCfg = cfg.programs.l2vpn;
+      enabledInstances = filter (inst: inst.enable) cfg.instances;
+      l2vpnInstances = filter (inst: inst.programName == "l2vpn") enabledInstances;
+      ipsecEnabledTransports = filterAttrs (n: v: v.ipsec.enable) l2vpnCfg.transports;
+      ipsecPeersForInstance = inst:
+        let
+          transportsForPeer = peer:
+            filterAttrs (n: v: v.remote.peer == peer) ipsecEnabledTransports;
+          peers = unique (mapAttrsToList (n: v: v.remote.peer) ipsecEnabledTransports);
+        in listToAttrs (map (peer: nameValuePair peer (transportsForPeer peer)) peers);
+      ipsecPeers = fold (a: b: a // b) {} (map ipsecPeersForInstance l2vpnInstances);
+      ipsecEnable = length (attrNames ipsecPeers) > 0;
+    in mkIf cfg.enable {
+      assertions = [
+        { assertion = length (attrNames l2vpnCfg.peers.local) == 1;
+          message = "Local L2VPN peer must be unique";
+        }
+        { assertion = ipsecEnable -> (
+            let
+              localPeer = elemAt (attrValues l2vpnCfg.peers.local) 0;
+            in
+              localPeer.ike != null
+          );
+          message = "IPsec not enabled for local peer";
+        }
+      ];
 
-            wantedBy = [ "multi-user.target" ];
-            requires = snmpdService;
-            before = snmpdService;
+      systemd.services = let
+        mkService = let
+          snmpdService = optional snmpd-cfg.enable "snmpd.service ";
+        in instance:
+          let
+            ptreeMasterService = optional instance.usePtreeMaster "snabb-ptree-master.service";
+          in
+          nameValuePair
+            instance.name
+            { inherit (instance) description;
 
-            preStart = ''
-              for d in ${cfg.stateDir} ${cfg.shmemDir}; do
-                [ -d $d ] || mkdir -p $d
-              done
-            '';
+              wantedBy = [ "multi-user.target" ];
+              wants = ptreeMasterService;
+              requires = snmpdService;
+              before = snmpdService;
+              after = ptreeMasterService;
 
-            serviceConfig = {
-              ExecStart = "@${cfg.pkg}/bin/snabb snabb ${instance.programName}"
-                             + (if instance.programOptions != "" then
-                                   " ${instance.programOptions}"
-                                 else
-                                   " ${cfg.programOptions}")
-                             + " ${instance.programArgs}";
-              Type = "simple";
-              User = "root";
-              Group = "root";
+              preStart = ''
+                for d in ${cfg.stateDir} ${cfg.shmemDir}; do
+                  [ -d $d ] || mkdir -p $d
+                done
+              '';
+
+              serviceConfig = {
+                ExecStart = "@${cfg.pkg}/bin/snabb snabb ${instance.programName}"
+                               + (if instance.programOptions != "" then
+                                     " ${instance.programOptions}"
+                                   else
+                                     " ${cfg.programOptions}")
+                               + " ${instance.programArgs}";
+                Type = "simple";
+                Restart = "always";
+                User = "root";
+                Group = "root";
+              };
             };
+      in listToAttrs (map mkService enabledInstances) //
+
+      ## ptree Master Server
+      (let
+        ptreeMaster = pkgs.writeShellScriptBin "ptree-master"
+          (let
+            ptreeInstances = (partition (inst: inst.usePtreeMaster)
+                                        enabledInstances).right;
+            mkInstanceInfo = instance:
+              {
+                program = instance.programName;
+                name = instance.programInstanceName;
+                config = instance.programConfig;
+              };
+            instancesInfo = map mkInstanceInfo ptreeInstances;
+            mkServiceReload = info:
+              ''
+                doInstance ${info.program} ${info.name} ${info.config}
+              '';
+          in
+          ''
+            #!${pkgs.bash}
+
+            set -e
+            stateDir=${cfg.stateDir}
+
+            doInstance () {
+              prog=$1
+              name=$2
+              newConfig=$3
+
+              state=$stateDir/$prog/$name
+              test -d $state || mkdir -p $state
+              config=$state/config
+              if ! test -e $config; then
+                echo "Installing initial config for $prog/$name"
+                ln -s $newConfig $config
+              elif ! ${pkgs.diffutils}/bin/diff $config $newConfig >/dev/null; then
+                echo "Installing updated config for $prog/$name"
+                rm -f $config $config.o
+                ln -s $newConfig $config
+                if [ -e $state/master.pid ]; then
+                  pid=$(cat $state/master.pid)
+                  if kill -0 $pid 2>/dev/null; then
+                    echo "Reloading service"
+                    ${cfg.pkg}/bin/snabb config load $pid $config
+                  else
+                    rm -f $state/*.pid
+                  fi
+                fi
+              fi
+            }
+          '' + concatStrings (map mkServiceReload instancesInfo));
+      in {
+        snabb-ptree-master = {
+          description = "Snabb ptree master service";
+          wantedBy = [ "multi-user.target" ];
+
+          serviceConfig = {
+            ExecStart = "@${ptreeMaster}/bin/ptree-master ptree-master";
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "root";
+            Group = "root";
           };
-    in listToAttrs (map mkService (partition (inst: inst.enable)
-                                             cfg.instances).right);
+        };
+      }) //
+
+      (if ipsecEnable then
+        (let
+          mkIPsecServices = child: transport:
+            let
+              local = transport.local.peer;
+              remote = transport.remote.peer;
+              initiateScriptName = "initiate-${child}";
+              initiateChild = pkgs.writeShellScriptBin initiateScriptName
+              ''
+                set -e
+                PATH=$PATH:${makeBinPath [ pkgs.gawk pkgs.strongswan ] }
+
+                ## Keep restarting indefinitely
+                systemctl reset-failed ${child}
+
+                ## Give the Snabb instances some time to set up the
+                ## SA files
+                sleep 5
+
+                echo "Peer: ${remote}"
+                echo "Current status:"
+                swanctl --list-sas --ike ${remote}
+
+                echo "Initiating child ${child}"
+                swanctl --initiate --child ${child}
+
+                get_id () {
+                    echo "$1" | awk '{print $2}' | tr '[#,]' '[  ]'
+                }
+
+                purge () {
+                    if [ $1 = "child" ] || ! [ $ike_purged ]; then
+                        echo "Purging duplicate $1 SA #$2"
+                        swanctl --terminate --$1-id $2
+                        [ $1 = "ike" ] && ike_purged="true" || true
+                    fi
+                }
+
+                child_id=0
+
+                ## Cleanup duplicate IKE and CHILD SAs.  Duplicates can
+                ## occur because both sides can act as an initiator.
+                ## The Strongswan IKE daemon supplies the Snabb
+                ## process only with the latest CHILD SAs that has
+                ## been established.  Multiple concurrent SAs can
+                ## cause Snabb to use the wrong one.
+                swanctl --list-sas | while read line; do
+                    if [[ $line =~ ^${remote}: ]]; then
+                        new_ike_id=$(get_id "$line")
+                        ike_purged=
+                        continue
+                    fi
+                    if [[ $line =~ ${child} ]]; then
+                        new_child_id=$(get_id "$line")
+                        if [ $child_id -gt 0 ]; then
+                            if [ $new_ike_id -eq $ike_id ]; then
+                                if [ $new_child_id -gt $child_id ]; then
+                                    purge "child" $child_id
+                                    child_id=$new_child_id
+                                else
+                                    purge "child" $child_id
+                                fi
+                            elif [ $new_child_id -gt $child_id ]; then
+                                purge "ike" $ike_id
+                                ike_id=$new_ike_id
+                                child_id=$new_child_id
+                            else
+                                purge "ike" $new_ike_id
+                            fi
+                        else
+                            ike_id=$new_ike_id
+                            child_id=$new_child_id
+                        fi
+                        continue
+                    fi
+                done
+
+                echo "New status:"
+                swanctl --list-sas --ike ${remote}
+              '';
+              rekeyScriptName = "rekey-${child}";
+              rekeyChild = pkgs.writeShellScriptBin rekeyScriptName
+              ''
+                PATH=$PATH:${makeBinPath [ pkgs.strongswan ] }
+
+                initiator=$(echo -e "${local}\n${remote}" | sort | head -1)
+
+                if [ $initiator = ${local} ]; then
+                  echo "Local system ${local} elected for rekeying"
+                  if swanctl --list-sas --ike ${remote} | egrep '${remote}.*ESTABLISHED' >/dev/null; then
+                    echo "Rekeying CHILD SA ${child}"
+                    swanctl --rekey --child ${child}
+                  else
+                    echo "IKE SA not established, not rekeying"
+                    swanctl --list-sas --ike ${remote}
+                  fi
+                else
+                    echo "Remote system ${remote} elected for rekeying"
+                fi
+              '';
+              childService = singleton "${child}.service";
+              l2vpnServices = map (inst: inst.name + ".service") l2vpnInstances;
+
+            in singleton (nameValuePair
+              child
+              { description = "IPsec initiator for child SA ${child}";
+
+                wantedBy = [ "multi-user.target" ];
+                wants = [ "strongswan-swanctl.service" ];
+                requires = [ "strongswan-swanctl.service" ] ++ l2vpnServices;
+                after = [ "strongswan-swanctl.service" ] ++ l2vpnServices;
+
+                serviceConfig = {
+                  ExecStart = "${initiateChild}/bin/${initiateScriptName}";
+                  Type = "simple";
+                  RemainAfterExit = true;
+                  Restart = "always";
+                  RestartSec = 1;
+                  User = "root";
+                  Group = "root";
+                };
+              }) ++
+              singleton (nameValuePair
+              (child + "_rekey")
+              { description = "IPsec rekey for child SA ${child}";
+
+                wantedBy = [ "multi-user.target" ];
+                wants = childService;
+                requires = childService;
+                after = childService;
+
+                serviceConfig = {
+                  ExecStart = "${rekeyChild}/bin/${rekeyScriptName}";
+                  Type = "oneshot";
+                  User = "root";
+                  Group = "root";
+                };
+              });
+        in listToAttrs (flatten (attrValues (mapAttrs mkIPsecServices ipsecEnabledTransports))))
+      else
+        {});
+
+      systemd.timers = if ipsecEnable then
+        (let
+          mkIPsecRekeyTimer = child: transport:
+            nameValuePair
+              (child + "_rekey")
+              { description = "IPsec rekey for child SA ${child}";
+
+                wantedBy = [ "timers.target" ];
+                timerConfig = {
+                  OnUnitInactiveSec = transport.ipsec.rekeyTime;
+                  OnBootSec = transport.ipsec.rekeyTime;
+                };
+              };
+        in mapAttrs' mkIPsecRekeyTimer ipsecEnabledTransports)
+      else
+        {};
+
+    ## Configure IKE, IPsec
+    services.strongswan-swanctl = mkIf ipsecEnable {
+      enable = true;
+      strongswan.extraConfig = ''
+        charon-systemd {
+          plugins {
+            kernel-snabb {
+              load = 1000
+            }
+          }
+        }
+      '';
+
+      swanctl = let
+        localPeer = elemAt (attrNames l2vpnCfg.peers.local) 0;
+        localCfg = elemAt (attrValues l2vpnCfg.peers.local) 0;
+        mkChild = peerName: name: transport: localCfg: peerCfg:
+          let
+            plen = {
+              ipv4 = "/32";
+              ipv6 = "/128";
+            }.${transport.addressFamily};
+          in with import programs/l2vpn/lib.nix config; {
+            local_ts = singleton "${(getAddress name "local").address}${plen}";
+            remote_ts = singleton "${(getAddress name "remote").address}${plen}";
+            mode = "tunnel";
+            esp_proposals = singleton transport.ipsec.espProposal;
+            rekey_time = transport.ipsec.rekeyTime;
+          };
+        mkIkePeer = name: transports:
+          let
+            peerCfg = l2vpnCfg.peers.remote.${name};
+          in {
+              local_addrs = localCfg.ike.addresses;
+              remote_addrs = peerCfg.ike.addresses;
+              rekey_time= "${peerCfg.ike.rekeyTime}";
+
+              local.local = {
+                auth = "psk";
+                id = "${localPeer}";
+              };
+              remote.${name} = {
+                auth = "psk";
+                id = "${name}";
+              };
+              version = 2;
+              inherit (peerCfg.ike) proposals;
+              children = mapAttrs (childName: transport: mkChild name childName transport localCfg peerCfg)
+                                  transports;
+            };
+        mkSecret = name: config:
+          if any (v: v == name) (attrNames ipsecPeers) then
+            {
+              id."${name}" = "${name}";
+              secret = config.ike.preSharedKey;
+            }
+          else
+            {};
+
+      in {
+        connections = mapAttrs (peer: transports: mkIkePeer peer transports) ipsecPeers;
+        secrets = {
+          ike = {
+            local = {
+              id."local" = "${localPeer}";
+              secret = localCfg.ike.preSharedKey;
+            };
+          } // mapAttrs mkSecret l2vpnCfg.peers.remote;
+        };
+      };
+    };
+
+    ## Strangely, the strongswan-swanctl module does not open these
+    ## ports itself.
+    networking.firewall = mkIf ipsecEnable {
+      allowedUDPPorts = [ 500 4500 ];
+    };
 
     services.snmpd = mkIf snmpd-cfg.enable {
       agentX = {
