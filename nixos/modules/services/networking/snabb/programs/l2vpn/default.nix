@@ -768,12 +768,13 @@ in
           }
         '';
 
-      instanceConfig = name: config:
+      instanceConfig = name: instanceName: config:
         let
           uplink = config.uplink;
         in pkgs.writeText "l2vpn-${name}"
          (''
             l2vpn-config {
+              instance-name ${instanceName};
           '' +
           (indentBlock 2
             ''
@@ -841,7 +842,7 @@ in
         programName = "l2vpn";
         programOptions = optionalString (config.programOptions != null)
                                         config.programOptions;
-        programConfig = instanceConfig name config;
+        programConfig = instanceConfig name programInstanceName config;
         programArgs = if config.usePtreeMaster then
                          let
                            instDir = cfg-snabb.stateDir + "/l2vpn/" + programInstanceName;
@@ -863,12 +864,23 @@ in
     ## Register the SNMP sub-agent that handles the L2VPN-related
     ## MIBs with the SNMP daemon.
     services.snmpd.agentX.subagents = mkIf cfg-snmpd.enable [
-      rec {
+      (let
+        ## Construct the list of active pseudowires so the agent
+        ## can ignore left-over index files.
+        collectInstance = instName: inst:
+          let
+            collectVPLS = name: config:
+              map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires);
+          in mapAttrsToList collectVPLS (inst.vpls);
+        pwIDs = pkgs.writeText "snabb-pseudowires"
+          (concatStringsSep "\n" (flatten (mapAttrsToList collectInstance cfg.instances)));
+      in rec {
         name = "pseudowire";
         executable = pkgs.snabbSNMPAgents + "/bin/${name}";
         args = ("--mibs-dir=${pkgs.snabbPwMIBs} "
-                + "--shmem-dir=${cfg-snabb.shmemDir}");
-      }
+                + "--shmem-dir=${cfg-snabb.shmemDir} "
+                + "--pseudowires=${pwIDs}");
+      })
     ];
 
     ## Generate the list of IP addresses and associated next-hops
