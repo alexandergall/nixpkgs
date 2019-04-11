@@ -1,6 +1,7 @@
 { stdenv, fetchurl
 , pkgconfig, autoreconfHook
 , gmp, python, iptables, ldns, unbound, openssl, pcsclite
+, perl, gperf, yacc, flex
 , openresolv
 , systemd, pam
 , curl
@@ -27,7 +28,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ pkgconfig autoreconfHook ];
   buildInputs =
-    [ curl gmp python iptables ldns unbound openssl pcsclite ]
+    [ curl gmp python iptables ldns unbound openssl pcsclite perl gperf yacc flex ]
     ++ optionals enableTNC [ trousers sqlite libxml2 ]
     ++ optionals stdenv.isLinux [ systemd.dev pam ]
     ++ optionals enableNetworkManager [ networkmanager ];
@@ -36,6 +37,7 @@ stdenv.mkDerivation rec {
     ./ext_auth-path.patch
     ./firewall_defaults.patch
     ./updown-path.patch
+    ./0001-Initial-version-of-kernel_snabb-plugin.patch
   ];
 
   postPatch = ''
@@ -66,7 +68,8 @@ stdenv.mkDerivation rec {
       "--enable-forecast" "--enable-connmark" "--enable-acert"
       "--enable-pkcs11" "--enable-eap-sim-pcsc" "--enable-dnscert" "--enable-unbound"
       "--enable-af-alg" "--enable-xauth-pam" "--enable-chapoly"
-      "--enable-curl" ]
+      "--enable-curl"
+      "--enable-kernel-snabb" ]
     ++ optionals stdenv.isx86_64 [ "--enable-aesni" "--enable-rdrand" ]
     ++ optional (stdenv.hostPlatform.system == "i686-linux") "--enable-padlock"
     ++ optionals enableTNC [
