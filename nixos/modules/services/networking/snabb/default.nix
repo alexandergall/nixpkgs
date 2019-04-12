@@ -342,8 +342,9 @@ in
       ipsecEnable = length (attrNames ipsecPeers) > 0;
     in mkIf cfg.enable {
       assertions = [
-        { assertion = length (attrNames l2vpnCfg.peers.local) == 1;
-          message = "Local L2VPN peer must be unique";
+        { assertion = length l2vpnInstances == 0 ||
+                      length (attrNames l2vpnCfg.peers.local) == 1;
+          message = "Local L2VPN peer missing or not unique";
         }
         { assertion = ipsecEnable -> (
             let
