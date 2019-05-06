@@ -296,6 +296,13 @@ in
               '';
               type = types.attrsOf (types.submodule {
                 options = {
+                  enable = mkOption {
+                    type = types.bool;
+                    default = true;
+                    description = ''
+                      Whether to enable this VPLS instance.
+                    '';
+                  };
                   description = mkOption {
                     type = types.str;
                     default = "";
@@ -562,6 +569,7 @@ in
         ''
           vpls {
             name "${name}";
+            enable ${boolToString vpls.enable};
             description "${vpls.description}";
             uplink "${vpls.uplink}";
             mtu ${toString vpls.mtu};
@@ -850,6 +858,10 @@ in
                            "${instDir}/config ${instDir}"
                       else
                         "${programConfig}";
+        restartTriggers =
+          let
+            jitConfig = config.luajitWorker;
+          in jitConfig.options ++ attrValues jitConfig.dump;
       };
     in map (name: mkL2VPNService name cfg.instances.${name})
        (attrNames cfg.instances);

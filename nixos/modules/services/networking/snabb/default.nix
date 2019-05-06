@@ -312,6 +312,9 @@ in
       ##     being run
       ##   programConfig
       ##     Configuration file, used if usePtreeMaster is true
+      ##   restartTriggers
+      ##     Arbitrary list of items that cause the service to be restarted
+      ##     when any of them changes
       instances = mkOption {
         type = types.listOf types.attrs;
         default = [];
@@ -372,6 +375,8 @@ in
               requires = snmpdService;
               before = snmpdService;
               after = ptreeMasterService;
+
+              restartTriggers = [ instance.restartTriggers ];
 
               preStart = ''
                 for d in ${cfg.stateDir} ${cfg.shmemDir}; do
