@@ -15,7 +15,7 @@ snabb.overrideAttrs (origAttrs: rec {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "1b35jsqnjffx1hsrhd8mfw43ssvccv2xz8m61lgmyans6w3nl8gf";
+    sha256 = "1ivz7r50lyqi7r25zag97n5qmmlhi8iw5ksnrl8kgspqffy01wr6";
   };
   makeFlags = [ "XCFLAGS=-DLUAJIT_USE_PERFTOOLS" ];
   buildInputs = origAttrs.buildInputs ++ [ git ];
