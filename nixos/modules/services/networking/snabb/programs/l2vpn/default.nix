@@ -883,7 +883,7 @@ in
           let
             collectVPLS = name: config:
               map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires);
-          in mapAttrsToList collectVPLS (inst.vpls);
+          in mapAttrsToList collectVPLS (filterAttrs (n: v: v.enable) inst.vpls);
         pwIDs = pkgs.writeText "snabb-pseudowires"
           (concatStringsSep "\n" (flatten (mapAttrsToList collectInstance cfg.instances)));
       in rec {
