@@ -861,7 +861,7 @@ in
         restartTriggers =
           let
             jitConfig = config.luajitWorker;
-          in jitConfig.options ++ attrValues jitConfig.dump;
+          in jitConfig.options ++ optional jitConfig.dump.enable (attrValues jitConfig.dump);
       };
     in map (name: mkL2VPNService name cfg.instances.${name})
        (attrNames cfg.instances);
@@ -883,7 +883,7 @@ in
           let
             collectVPLS = name: config:
               map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires);
-          in mapAttrsToList collectVPLS (inst.vpls);
+          in mapAttrsToList collectVPLS (filterAttrs (n: v: v.enable) inst.vpls);
         pwIDs = pkgs.writeText "snabb-pseudowires"
           (concatStringsSep "\n" (flatten (mapAttrsToList collectInstance cfg.instances)));
       in rec {
