@@ -861,7 +861,7 @@ in
         restartTriggers =
           let
             jitConfig = config.luajitWorker;
-          in jitConfig.options ++ attrValues jitConfig.dump;
+          in jitConfig.options ++ optional jitConfig.dump.enable (attrValues jitConfig.dump);
       };
     in map (name: mkL2VPNService name cfg.instances.${name})
        (attrNames cfg.instances);
