@@ -557,13 +557,12 @@ in
           }
         '';
 
-      mkConfigIterator = attr: f:
-        set: data:
-          if isAttrs set.${attr} then
-            concatStrings (map (name: f name (getAttr name set.${attr}) data)
-                               (attrNames set.${attr}))
+      mkConfigIterator = f:
+        obj: data:
+          if isAttrs obj then
+            (concatStrings (attrValues (mapAttrs (n: v: f n v data) obj)))
           else
-            concatStrings (map (item: f item data) set.${attr});
+            concatStrings (map (item: f item data) obj);
 
       vplsConfig = name: vpls: ignore:
         ''
@@ -594,8 +593,8 @@ in
           }
         '') +
         (indentBlock 2
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
-        (indentBlock 2 ((mkConfigIterator "pseudowires" pwConfig) vpls vpls)) +
+         ((mkConfigIterator acConfig) vpls.attachmentCircuits null)) +
+        (indentBlock 2 ((mkConfigIterator pwConfig) vpls.pseudowires vpls)) +
         ''
           } // vpls ${name}
         '';
@@ -723,8 +722,7 @@ in
                  enable ${boolToString intf.trunk.enable};
                  encapsulation ${intf.trunk.encapsulation};
              '') +
-             ((indentBlock 4 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk intf))) +
+             ((indentBlock 4 ((mkConfigIterator vlansConfig) intf.trunk.vlans intf))) +
              ''
                  }
                } // interface ${intf.name}
@@ -749,7 +747,7 @@ in
             name "${name}";
         '' +
         (indentBlock 2
-          ((mkConfigIterator "endpoints" mkEndpoint) config null)) +
+          ((mkConfigIterator mkEndpoint) config.endpoints null)) +
         ''
           }
         '';
@@ -837,20 +835,19 @@ in
                            else
                              intf) ourInterfaces;
           in
-          (indentBlock 2 ((mkConfigIterator "interfaces" interfaceConfig)
-                                            { interfaces = ourInterfaces; } null))) +
+          (indentBlock 2 ((mkConfigIterator interfaceConfig) ourInterfaces null))) +
           (indentBlock 2
             ''
               peers {
             '') +
-          (indentBlock 4 ((mkConfigIterator "local" mkPeers) cfg.peers "local")) +
-          (indentBlock 4 ((mkConfigIterator "remote" mkPeers) cfg.peers "remote")) +
+          (indentBlock 4 ((mkConfigIterator mkPeers) cfg.peers.local "local")) +
+          (indentBlock 4 ((mkConfigIterator mkPeers) cfg.peers.remote "remote")) +
           (indentBlock 2
             ''
               }
             '') +
-          (indentBlock 2 ((mkConfigIterator "transports" mkTransport) cfg null)) +
-          (indentBlock 2 ((mkConfigIterator "vpls" vplsConfig) config null)) +
+          (indentBlock 2 ((mkConfigIterator mkTransport) cfg.transports null)) +
+          (indentBlock 2 ((mkConfigIterator vplsConfig) config.vpls null)) +
           ''
             }
           '');
