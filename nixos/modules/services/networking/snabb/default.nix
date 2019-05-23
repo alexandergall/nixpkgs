@@ -458,7 +458,6 @@ in
           serviceConfig = {
             ExecStart = "@${ptreeMaster}/bin/ptree-master ptree-master";
             Type = "oneshot";
-            RemainAfterExit = true;
             User = "root";
             Group = "root";
           };
@@ -484,13 +483,6 @@ in
                 ## SA files
                 sleep 5
 
-                echo "Peer: ${remote}"
-                echo "Current status:"
-                swanctl --list-sas --ike ${remote}
-
-                echo "Initiating child ${child}"
-                swanctl --initiate --child ${child}
-
                 get_id () {
                     echo "$1" | awk '{print $2}' | tr '[#,]' '[  ]'
                 }
@@ -503,47 +495,62 @@ in
                     fi
                 }
 
-                child_id=0
-
-                ## Cleanup duplicate IKE and CHILD SAs.  Duplicates can
-                ## occur because both sides can act as an initiator.
-                ## The Strongswan IKE daemon supplies the Snabb
-                ## process only with the latest CHILD SAs that has
-                ## been established.  Multiple concurrent SAs can
-                ## cause Snabb to use the wrong one.
-                swanctl --list-sas | while read line; do
-                    if [[ $line =~ ^${remote}: ]]; then
-                        new_ike_id=$(get_id "$line")
-                        ike_purged=
-                        continue
-                    fi
-                    if [[ $line =~ ${child} ]]; then
-                        new_child_id=$(get_id "$line")
-                        if [ $child_id -gt 0 ]; then
-                            if [ $new_ike_id -eq $ike_id ]; then
-                                if [ $new_child_id -gt $child_id ]; then
-                                    purge "child" $child_id
+                cleanup_sas () {
+                    ## Cleanup duplicate IKE and CHILD SAs.  Duplicates can
+                    ## occur because both sides can act as an initiator.
+                    ## The Strongswan IKE daemon supplies the Snabb
+                    ## process only with the latest CHILD SAs that has
+                    ## been established.  Multiple concurrent SAs can
+                    ## cause Snabb to use the wrong one.
+                    child_id=0
+                    swanctl --list-sas | while read line; do
+                        if [[ $line =~ ^${remote}: ]]; then
+                            new_ike_id=$(get_id "$line")
+                            ike_purged=
+                            continue
+                        fi
+                        if [[ $line =~ ${child} ]]; then
+                            new_child_id=$(get_id "$line")
+                            if [ $child_id -gt 0 ]; then
+                                if [ $new_ike_id -eq $ike_id ]; then
+                                    if [ $new_child_id -gt $child_id ]; then
+                                        purge "child" $child_id
+                                        child_id=$new_child_id
+                                    else
+                                        purge "child" $child_id
+                                    fi
+                                elif [ $new_child_id -gt $child_id ]; then
+                                    purge "ike" $ike_id
+                                    ike_id=$new_ike_id
                                     child_id=$new_child_id
                                 else
-                                    purge "child" $child_id
+                                    purge "ike" $new_ike_id
                                 fi
-                            elif [ $new_child_id -gt $child_id ]; then
-                                purge "ike" $ike_id
+                            else
                                 ike_id=$new_ike_id
                                 child_id=$new_child_id
-                            else
-                                purge "ike" $new_ike_id
                             fi
-                        else
-                            ike_id=$new_ike_id
-                            child_id=$new_child_id
+                            continue
                         fi
-                        continue
-                    fi
-                done
+                    done
+                }
 
-                echo "New status:"
-                swanctl --list-sas --ike ${remote}
+                while true; do
+                    if ! swanctl --list-sas --ike ${remote} | egrep '${child}.*INSTALLED' >/dev/null; then
+                        echo "Child SA for ${child} not present"
+                        echo "Peer: ${remote}"
+                        echo "Current status:"
+                        swanctl --list-sas --ike ${remote}
+
+                        echo "Initiating..."
+                        swanctl --initiate --child ${child}
+                        cleanup_sas
+
+                        echo "New status:"
+                        swanctl --list-sas --ike ${remote}
+                    fi
+                    sleep 5
+                done
               '';
               rekeyScriptName = "rekey-${child}";
               rekeyChild = pkgs.writeShellScriptBin rekeyScriptName
@@ -580,7 +587,6 @@ in
                 serviceConfig = {
                   ExecStart = "${initiateChild}/bin/${initiateScriptName}";
                   Type = "simple";
-                  RemainAfterExit = true;
                   Restart = "always";
                   RestartSec = 1;
                   User = "root";
