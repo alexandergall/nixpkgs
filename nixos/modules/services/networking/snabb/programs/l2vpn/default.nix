@@ -557,13 +557,12 @@ in
           }
         '';
 
-      mkConfigIterator = attr: f:
-        set: data:
-          if isAttrs set.${attr} then
-            concatStrings (map (name: f name (getAttr name set.${attr}) data)
-                               (attrNames set.${attr}))
+      mkConfigIterator = f:
+        obj: data:
+          if isAttrs obj then
+            (concatStrings (attrValues (mapAttrs (n: v: f n v data) obj)))
           else
-            concatStrings (map (item: f item data) set.${attr});
+            concatStrings (map (item: f item data) obj);
 
       vplsConfig = name: vpls: ignore:
         ''
@@ -594,8 +593,8 @@ in
           }
         '') +
         (indentBlock 2
-         ((mkConfigIterator "attachmentCircuits" acConfig) vpls null)) +
-        (indentBlock 2 ((mkConfigIterator "pseudowires" pwConfig) vpls vpls)) +
+         ((mkConfigIterator acConfig) vpls.attachmentCircuits null)) +
+        (indentBlock 2 ((mkConfigIterator pwConfig) vpls.pseudowires vpls)) +
         ''
           } // vpls ${name}
         '';
@@ -723,8 +722,7 @@ in
                  enable ${boolToString intf.trunk.enable};
                  encapsulation ${intf.trunk.encapsulation};
              '') +
-             ((indentBlock 4 ((mkConfigIterator "vlans" vlansConfig)
-                                                intf.trunk intf))) +
+             ((indentBlock 4 ((mkConfigIterator vlansConfig) intf.trunk.vlans intf))) +
              ''
                  }
                } // interface ${intf.name}
@@ -749,7 +747,7 @@ in
             name "${name}";
         '' +
         (indentBlock 2
-          ((mkConfigIterator "endpoints" mkEndpoint) config null)) +
+          ((mkConfigIterator mkEndpoint) config.endpoints null)) +
         ''
           }
         '';
@@ -776,7 +774,7 @@ in
           }
         '';
 
-      instanceConfig = name: instanceName: config:
+      instanceConfig = name: instanceName: config: otherInstanceNames:
         let
           uplink = config.uplink;
         in pkgs.writeText "l2vpn-${name}"
@@ -811,60 +809,76 @@ in
               }
             '') +
           (let
-            ## Select the interfaces referred to by uplinks and acs
+            ## Select the interfaces referred to by uplinks and acs, check for
+            ## conflicts with other L2VPN instances
             baseInterface = intf:
               elemAt (splitString "." intf) 0;
-            refInterfaces =
+            refInterfaces = config:
               (unique (flatten (map (vpls: (singleton (baseInterface vpls.uplink)) ++
                                            (map baseInterface
                                                 (attrValues vpls.attachmentCircuits)))
                                     (attrValues config.vpls))));
-            ourInterfaces = {
-              interfaces = (partition (e: (any (intf: e.name == intf)
-                                              refInterfaces)) cfg-snabb.interfaces).right;
-            };
+            interfaces = config:
+              (partition (e: (any (intf: e.name == intf)
+                                  (refInterfaces config))) cfg-snabb.interfaces).right;
+            otherInterfaces = flatten (map (name: interfaces cfg.instances.${name}) otherInstanceNames);
+            otherInterfaceNames = map (intf: intf.name) otherInterfaces;
+            ourInterfaces =
+              let
+                ourInterfaces = interfaces config;
+                checkDuplicate = intf:
+                  any (name: intf.name == name) otherInterfaceNames;
+              in
+                map (intf: if checkDuplicate intf
+                             then throw ("${instanceName}: interface ${intf.name} "
+                               + "conflicts with other L2VPN instance")
+                           else
+                             intf) ourInterfaces;
           in
-          (indentBlock 2 ((mkConfigIterator "interfaces" interfaceConfig)
-                                            ourInterfaces null))) +
+          (indentBlock 2 ((mkConfigIterator interfaceConfig) ourInterfaces null))) +
           (indentBlock 2
             ''
               peers {
             '') +
-          (indentBlock 4 ((mkConfigIterator "local" mkPeers) cfg.peers "local")) +
-          (indentBlock 4 ((mkConfigIterator "remote" mkPeers) cfg.peers "remote")) +
+          (indentBlock 4 ((mkConfigIterator mkPeers) cfg.peers.local "local")) +
+          (indentBlock 4 ((mkConfigIterator mkPeers) cfg.peers.remote "remote")) +
           (indentBlock 2
             ''
               }
             '') +
-          (indentBlock 2 ((mkConfigIterator "transports" mkTransport) cfg null)) +
-          (indentBlock 2 ((mkConfigIterator "vpls" vplsConfig) config null)) +
+          (indentBlock 2 ((mkConfigIterator mkTransport) cfg.transports null)) +
+          (indentBlock 2 ((mkConfigIterator vplsConfig) config.vpls null)) +
           ''
             }
           '');
 
-      mkL2VPNService = programInstanceName: config: rec {
-        name = "snabb-${programName}-${programInstanceName}";
-        inherit (config) enable usePtreeMaster;
-        inherit programInstanceName;
-        description = "Snabb L2VPN termination point ${name}";
-        programName = "l2vpn";
-        programOptions = optionalString (config.programOptions != null)
-                                        config.programOptions;
-        programConfig = instanceConfig name programInstanceName config;
-        programArgs = if config.usePtreeMaster then
-                         let
-                           instDir = cfg-snabb.stateDir + "/l2vpn/" + programInstanceName;
-                         in
-                           "${instDir}/config ${instDir}"
-                      else
-                        "${programConfig}";
-        restartTriggers =
-          let
-            jitConfig = config.luajitWorker;
-          in jitConfig.options ++ optional jitConfig.dump.enable (attrValues jitConfig.dump);
+      mkL2VPNService = programInstanceName: otherInstanceNames:
+        let
+          config = cfg.instances.${programInstanceName};
+        in rec {
+          name = "snabb-${programName}-${programInstanceName}";
+          inherit (config) enable usePtreeMaster;
+          inherit programInstanceName;
+          description = "Snabb L2VPN termination point ${name}";
+          programName = "l2vpn";
+          programOptions = optionalString (config.programOptions != null)
+                                          config.programOptions;
+          programConfig = instanceConfig name programInstanceName config otherInstanceNames;
+          programArgs = if config.usePtreeMaster then
+                           let
+                             instDir = cfg-snabb.stateDir + "/l2vpn/" + programInstanceName;
+                           in
+                             "${instDir}/config ${instDir}"
+                        else
+                          "${programConfig}";
+          restartTriggers =
+            let
+              jitConfig = config.luajitWorker;
+            in jitConfig.options ++ optional jitConfig.dump.enable (attrValues jitConfig.dump);
       };
-    in map (name: mkL2VPNService name cfg.instances.${name})
-       (attrNames cfg.instances);
+
+      instanceNames = attrNames cfg.instances;
+    in map (name: mkL2VPNService name (remove name instanceNames)) instanceNames;
 
     ## Add our sub-interfaces to services.snabb.subInterfaces
     services.snabb.subInterfaces = let
