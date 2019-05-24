@@ -535,8 +535,42 @@ in
                     done
                 }
 
+                ipsec_dir=
+                maybe_get_ipsec_dir () {
+                  if [ -z $ipsec_dir ]; then
+                      addrs=$(swanctl --list-sas --ike ${remote} | \
+                                awk '/${child}/,/remote/' | tail -2 |
+                                awk '{print $2}' | sed -e 's!/.*!!')
+                      if [[ $addrs =~ : ]]; then
+                        af="ipv6"
+                      else
+                        af="ipv4"
+                      fi
+                      ipsec_dir=${cfg.stateDir}$(${cfg.pkg}/bin/snabb l2vpn --ipsec $af $addrs)
+                  fi
+                }
+
+                check_spi () {
+                  file=$ipsec_dir"/"$1
+                  spi=$(od -An -N4 -t d4 $file)
+                }
+
                 while true; do
-                    if ! swanctl --list-sas --ike ${remote} | egrep '${child}.*INSTALLED' >/dev/null; then
+                    swanctl --list-sas --ike ${remote} | \
+                      egrep '${child}.*INSTALLED' >/dev/null && child="installed"
+
+                    if [ "$child" = "installed" ]; then
+                        maybe_get_ipsec_dir
+                        check_spi in.ipsec_sa
+                    fi
+
+                    ## An SPI of 0 signals that the l2vpn service has been
+                    ## restarted.  In this case, we re-initiate even if the
+                    ## child SA exists, because the new instance of l2vpn
+                    ## didn't pick up the exiting key (because it might be
+                    ## a left-over from a Strongswan process that no longer
+                    ## exists).
+                    if [ -z $child -o $spi -eq 0 ]; then
                         echo "Child SA for ${child} not present"
                         echo "Peer: ${remote}"
                         echo "Current status:"
