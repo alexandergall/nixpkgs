@@ -559,6 +559,7 @@ in
                     swanctl --list-sas --ike ${remote} | \
                       egrep '${child}.*INSTALLED' >/dev/null && child="installed"
 
+                    spi=-1
                     if [ "$child" = "installed" ]; then
                         maybe_get_ipsec_dir
                         check_spi in.ipsec_sa
@@ -570,7 +571,7 @@ in
                     ## didn't pick up the exiting key (because it might be
                     ## a left-over from a Strongswan process that no longer
                     ## exists).
-                    if [ -z $child -o $spi -eq 0 ]; then
+                    if [ -z "$child" -o $spi -eq 0 ]; then
                         echo "Child SA for ${child} not present"
                         echo "Peer: ${remote}"
                         echo "Current status:"
