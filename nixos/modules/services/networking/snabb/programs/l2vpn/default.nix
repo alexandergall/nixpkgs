@@ -85,6 +85,18 @@ in
                         The address of the endpoint.
                       '';
                     };
+                    addressNATInside = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      description = ''
+                        If the peer is behind a NAT, the traffic selector sent
+                        to the IKE process must be the address on the inside
+                        of the NAT, while the tunnel destination must be the
+                        address on the outside of the NAT.  The former is supplied
+                        by this option while the latter is supplied by the
+                        addres option.
+                      '';
+                    };
                   };
                 });
                 description = ''
@@ -738,6 +750,13 @@ in
             address {
               ${config.addressFamily} "${config.address}";
             }
+        '' +
+        (optionalString (config.addressNATInside != null)
+          (indentBlock 2
+            ''
+              address-NAT-inside "${config.addressNATInside}";
+            '')) +
+        ''
           }
         '';
 

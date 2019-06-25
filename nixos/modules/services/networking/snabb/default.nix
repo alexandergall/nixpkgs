@@ -688,8 +688,8 @@ in
               ipv6 = "/128";
             }.${transport.addressFamily};
           in with import programs/l2vpn/lib.nix config; {
-            local_ts = singleton "${(getAddress name "local").address}${plen}";
-            remote_ts = singleton "${(getAddress name "remote").address}${plen}";
+            local_ts = singleton "${(getLocalAddress name).address}${plen}";
+            remote_ts = singleton "${(getRemoteAddress name).address}${plen}";
             mode = "tunnel";
             esp_proposals = singleton transport.ipsec.espProposal;
             rekey_time = transport.ipsec.rekeyTime;
