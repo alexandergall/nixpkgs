@@ -9,13 +9,13 @@ with pkgs;
 ##      https://github.com/snabbco/snabb/archive/${version}.tar.gz
 snabb.overrideAttrs (origAttrs: rec {
   name = "snabb-${version}";
-  version = "l2vpn-v15";
+  version = "l2vpn-v16";
 
   src = fetchFromGitHub {
     owner = "snabbco";
     repo = "snabb";
     rev = "${version}";
-    sha256 = "0phzhh2q2xbq66sy5h0h8289jas1585xdyfj7jldwy5bnhkn97gy";
+    sha256 = "1sk9c79jhc0rpfwg4ky1bhwmml29pky7pp9qwivggzlw1jzanxbm";
   };
   makeFlags = [ "XCFLAGS=-DLUAJIT_USE_PERFTOOLS" ];
   buildInputs = origAttrs.buildInputs ++ [ git ];
