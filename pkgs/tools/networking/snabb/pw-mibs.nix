@@ -6,8 +6,8 @@ stdenv.mkDerivation rec {
   name = "snabb-PW-MIBs";
   src = fetchgit {
     url = "https://github.com/alexandergall/snabb-snmp-subagent.git";
-    sha256 = "0jarxsdsdmsrlnd12hmczpwczds0zbncf0pyai32qjn1vbx9q3as";
-    rev = "bbf56533313dbb62f5e938fefcdd3e98292233d2";
+    sha256 = "03ls1c8kkgjmqpgnqspkalagk4wlww7kr1s2dpv7gzp3ags4lmrb";
+    rev = "7ef50885fbf3f87c6fe333c22e5561fb7d59249c";
   };
   builder = writeScript "copy-mibs" ''
     source $stdenv/setup
