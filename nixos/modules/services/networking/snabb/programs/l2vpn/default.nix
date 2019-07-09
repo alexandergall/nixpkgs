@@ -910,21 +910,27 @@ in
     ## MIBs with the SNMP daemon.
     services.snmpd.agentX.subagents = mkIf cfg-snmpd.enable [
       (let
-        ## Construct the list of active pseudowires so the agent
-        ## can ignore left-over index files.
-        collectInstance = instName: inst:
+        ## Construct the list of active vpls instances and pseudowires
+        ## so the agent can ignore left-over index files.
+        collectInstance = { pws ? false}: instName: inst:
           let
             collectVPLS = name: config:
-              map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires);
+              if pws then
+                map (pw: concatStringsSep "_" [ instName name pw]) (attrNames config.pseudowires)
+              else
+                concatStringsSep "_" [ instName name ];
           in mapAttrsToList collectVPLS (filterAttrs (n: v: v.enable) inst.vpls);
         pwIDs = pkgs.writeText "snabb-pseudowires"
-          (concatStringsSep "\n" (flatten (mapAttrsToList collectInstance cfg.instances)));
+          (concatStringsSep "\n" (flatten (mapAttrsToList (collectInstance { pws = true; }) cfg.instances)));
+        vplsIDs = pkgs.writeText "snabb-vpls"
+          (concatStringsSep "\n" (flatten (mapAttrsToList (collectInstance {}) cfg.instances)));
       in rec {
         name = "pseudowire";
         executable = pkgs.snabbSNMPAgents + "/bin/${name}";
         args = ("--mibs-dir=${pkgs.snabbPwMIBs} "
                 + "--shmem-dir=${cfg-snabb.shmemDir} "
-                + "--pseudowires=${pwIDs}");
+                + "--vpls-ids=${vplsIDs} "
+                + "--pseudowire-ids=${pwIDs}");
       })
     ];
 
