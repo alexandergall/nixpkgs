@@ -610,7 +610,7 @@ in
               l2vpnServices = map (inst: inst.name + ".service") l2vpnInstances;
 
             in singleton (nameValuePair
-              child
+              (child + "_ipsec_initiate")
               { description = "IPsec initiator for child SA ${child}";
 
                 wantedBy = [ "multi-user.target" ];
@@ -628,21 +628,22 @@ in
                 };
               }) ++
               singleton (nameValuePair
-              (child + "_rekey")
-              { description = "IPsec rekey for child SA ${child}";
+                (child + "_ipsec_rekey")
+                { description = "IPsec rekey for child SA ${child}";
 
-                wantedBy = [ "multi-user.target" ];
-                wants = childService;
-                requires = childService;
-                after = childService;
+                  wantedBy = [ "multi-user.target" ];
+                  wants = childService;
+                  requires = childService;
+                  after = childService;
 
-                serviceConfig = {
-                  ExecStart = "${rekeyChild}/bin/${rekeyScriptName}";
-                  Type = "oneshot";
-                  User = "root";
-                  Group = "root";
-                };
-              });
+                  serviceConfig = {
+                    ExecStart = "${rekeyChild}/bin/${rekeyScriptName}";
+                    Type = "oneshot";
+                    User = "root";
+                    Group = "root";
+                  };
+                }
+              );
         in listToAttrs (flatten (attrValues (mapAttrs mkIPsecServices ipsecEnabledTransports))))
       else
         {});
