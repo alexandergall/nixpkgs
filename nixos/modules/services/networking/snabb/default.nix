@@ -418,7 +418,6 @@ in
               '';
           in
           ''
-            #!${pkgs.bash}
 
             set -e
             stateDir=${cfg.stateDir}
